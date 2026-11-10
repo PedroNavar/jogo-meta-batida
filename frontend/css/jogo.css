@@ -1,7 +1,7 @@
 /* Metta: títulos Expanded, texto Inter, superfícies oficiais e hierarquia editorial. */
-@font-face{font-family:'Zalando Sans Expanded';src:url('fonts/ZalandoSansExpanded-ExtraBold.woff2') format('woff2');font-weight:800;font-display:swap}
-@font-face{font-family:Inter;src:url('fonts/Inter-Regular.woff2') format('woff2');font-weight:400;font-display:swap}
-@font-face{font-family:Inter;src:url('fonts/Inter-SemiBold.woff2') format('woff2');font-weight:600;font-display:swap}
+@font-face{font-family:'Zalando Sans Expanded';src:url('../fonts/ZalandoSansExpanded-ExtraBold.woff2') format('woff2');font-weight:800;font-display:swap}
+@font-face{font-family:Inter;src:url('../fonts/Inter-Regular.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:Inter;src:url('../fonts/Inter-SemiBold.woff2') format('woff2');font-weight:600;font-display:swap}
 :root{--noite:#0C161B;--card:#1A2A35;--ardosia:#2E3E47;--aco:#B0CAD8;--cinza-azul:#435965;--gelo:#EBF3F7;--branco:#FFF;--amarelo:#FFBE18;--amarelo-hover:#FFC531;--amarelo-press:#FFB618;--laranja:#E98300;--tinta:#0C161B;--azul:#435965;--azul-claro:#B0CAD8;--cinza:#EBF3F7;--azul-noite:#0C161B;--borda:#435965;--fonte:Inter,sans-serif;--display:'Zalando Sans Expanded',sans-serif}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
