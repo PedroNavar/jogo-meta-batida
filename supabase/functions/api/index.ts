@@ -149,7 +149,13 @@ async function estadoDe(token: string, feedback?: any) {
   if (!q) return { ...base, situacao: "terminou" };
   const segs = q.segundos ?? rodada.segundos;
   const totalMs = segs * 1000;
-  const inicio = j.pergunta_iniciada_em ? new Date(j.pergunta_iniciada_em).getTime() : Date.now();
+  // O cronômetro só começa quando ESTA chamada é a primeira a buscar a pergunta (lazy):
+  // /comecar e /responder deixam pergunta_iniciada_em em null ao avançar, pra não descontar
+  // o tempo de carregamento/feedback que o jogador ainda nem viu a pergunta na tela.
+  let inicio = j.pergunta_iniciada_em ? new Date(j.pergunta_iniciada_em).getTime() : Date.now();
+  if (!j.pergunta_iniciada_em) {
+    await db.from("jogador").update({ pergunta_iniciada_em: new Date(inicio).toISOString() }).eq("id", j.id);
+  }
   const restanteMs = Math.max(0, totalMs - (Date.now() - inicio));
   const prox = perguntas[j.indice_atual + 1];
   return {
@@ -243,8 +249,10 @@ Deno.serve(async (req) => {
       if (rodada.status !== "aberta") return json(await estadoDe(bearer));
       if (rodada.travada) return json(await estadoDe(bearer)); // continua aguardando
       if (j.situacao === "aguardando") {
+        // null: estadoDe() carimba o início na mesma resposta, o mais perto possível
+        // do momento em que a pergunta realmente aparece pro jogador.
         await db.from("jogador").update({
-          situacao: "em-jogo", indice_atual: 0, pergunta_iniciada_em: new Date().toISOString(),
+          situacao: "em-jogo", indice_atual: 0, pergunta_iniciada_em: null,
         }).eq("id", j.id);
         await emitirRanking(rodada.id);
       }
@@ -287,7 +295,9 @@ Deno.serve(async (req) => {
         erros: j.erros + (acertou ? 0 : 1),
         indice_atual: proximo,
         situacao: terminou ? "terminou" : "em-jogo",
-        pergunta_iniciada_em: terminou ? null : new Date().toISOString(),
+        // null: o cronômetro da próxima pergunta só começa quando ela for de fato buscada
+        // (estadoDe carimba na hora), não agora — o jogador ainda está vendo o feedback.
+        pergunta_iniciada_em: null,
       }).eq("id", j.id);
       await emitirRanking(rodada.id);
 
@@ -333,8 +343,10 @@ Deno.serve(async (req) => {
 
       if (body.acao === "comecar") {
         await db.from("rodada").update({ travada: false }).eq("id", id).eq("status", "aberta");
+        // null: cada jogador carimba o próprio início só quando buscar a pergunta (estadoDe),
+        // já que nem todos vão abrir a tela no mesmo instante.
         await db.from("jogador").update({
-          situacao: "em-jogo", indice_atual: 0, pergunta_iniciada_em: new Date().toISOString(),
+          situacao: "em-jogo", indice_atual: 0, pergunta_iniciada_em: null,
         }).eq("rodada_id", id).eq("situacao", "aguardando");
         await emitirRanking(id);
         return json(await verRodada(id));
