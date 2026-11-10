@@ -1,4 +1,4 @@
-import { api, elemento } from './cliente.js';
+import { api, elemento, baseUrl } from './cliente.js';
 const $=id=>document.getElementById(id);
 let config=null,senha='',rodada=null,espera=null,ocupado=false;
 const status=m=>{$('status').textContent=m;};
@@ -16,7 +16,7 @@ function verCampos() {
 function mostrar() {
  $('criar').hidden=true;$('criada').hidden=false;$('nome-rodada').textContent=rodada.nome;
  const fim=rodada.status==='encerrada';$('contagem').textContent=rodada.aPostos.length+' a postos · '+rodada.emJogo+' jogando · '+rodada.terminaram+' terminaram'+(fim?' · rodada encerrada':rodada.travada?' · jogo travado':'');$('encerrar').hidden=fim;$('resetar').hidden=fim;$('comecar-todos').hidden=fim || !rodada.travada;$('a-postos').replaceChildren(...rodada.aPostos.map(p=>elemento('li',p.nome+' · '+p.cargo)));if(fim)clearInterval(espera);
- $('link-jogo').value=location.origin+'/?r='+rodada.id;$('link-telao').value=location.origin+'/telao.html?r='+rodada.id;$('abrir-telao').href=$('link-telao').value;$('whatsapp').href='https://wa.me/?text='+encodeURIComponent('Jogo da Meta Batida: '+$('link-jogo').value);
+ $('link-jogo').value=baseUrl()+'?r='+rodada.id;$('link-telao').value=baseUrl()+'telao.html?r='+rodada.id;$('abrir-telao').href=$('link-telao').value;$('whatsapp').href='https://wa.me/?text='+encodeURIComponent('Jogo da Meta Batida: '+$('link-jogo').value);
 }
 async function acompanhar() {
  try {rodada=await api('/api/gerente',{body:{senha,acao:'ver',id:rodada.id}});mostrar();} catch {status('Reconectando…');}

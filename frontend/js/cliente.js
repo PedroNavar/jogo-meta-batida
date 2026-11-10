@@ -1,12 +1,15 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { API, SUPABASE_URL, SUPABASE_KEY, CLIENTE } from './config.js';
 export const pausa=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+// URL absoluta da PASTA da página atual (sem o nome do arquivo). Serve pra montar links pra
+// copiar/compartilhar que funcionem tanto na raiz quanto numa subpasta de cliente (ex.: /vilarejo/).
+export const baseUrl=()=>new URL('.',location.href).href;
 const sb=createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false}});
-// /config e /entrar resolvem o tenant por ?c=; as demais rotas já identificam a rodada pelo token/id.
+// /config, /entrar e /gerente resolvem o tenant por ?c=; as demais rotas já identificam a rodada pelo token/id.
 function urlDaRota(rota) {
  const [caminho,busca='']=rota.replace(/^\/api/,'').split('?');
  const params=new URLSearchParams(busca);
- if((caminho==='/config' || caminho==='/entrar') && !params.has('c'))params.set('c',CLIENTE);
+ if((caminho==='/config' || caminho==='/entrar' || caminho==='/gerente') && !params.has('c'))params.set('c',CLIENTE);
  const qs=params.toString();
  return API+caminho+(qs?'?'+qs:'');
 }

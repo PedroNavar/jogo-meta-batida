@@ -1,0 +1,3 @@
+-- Senha de teste de gerente/admin da Vilarejo definida (via definir_senha_gerente/admin)
+-- e já aplicada no banco remoto. Redigida aqui de propósito antes do commit: repo é
+-- público, senha não entra em texto puro no histórico do git (ver memória/handoff).

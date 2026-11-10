@@ -91,6 +91,22 @@ async function perguntasDaRodada(rodadaId: string) {
   return data ?? [];
 }
 
+// ---- Rodada vista pelo gerente/regional (resumo + a postos) ----------------
+async function verRodada(rodadaId: string) {
+  const { data: rodada } = await db.from("rodada").select("*").eq("id", rodadaId).single();
+  const { data: jogadores } = await db.from("jogador").select("nome,cargo,situacao").eq("rodada_id", rodadaId);
+  const js = jogadores ?? [];
+  return {
+    id: rodada.id, nome: rodada.nome, status: rodada.status, travada: rodada.travada,
+    emJogo: js.filter((j) => j.situacao === "em-jogo").length,
+    terminaram: js.filter((j) => j.situacao === "terminou").length,
+    aPostos: js.filter((j) => j.situacao === "aguardando").map((j) => ({ nome: j.nome, cargo: j.cargo })),
+  };
+}
+const PUBLICO_POR_OPCAO: Record<string, string[]> = {
+  vendedores: ["Vendedor"], gerentes: ["Gerente"], ambos: ["Vendedor", "Gerente"],
+};
+
 // ---- Posição do jogador (entre os elegíveis ao pódio) ----------------------
 async function posicoes(rodadaId: string) {
   const { data } = await db.from("jogador").select("id,cargo,loja,pontos").eq("rodada_id", rodadaId);
@@ -280,6 +296,69 @@ Deno.serve(async (req) => {
         pontos, restanteMs: 2500,
       };
       return json(await estadoDe(bearer, terminou ? undefined : feedback));
+    }
+
+    // ---------------- POST /gerente ----------------
+    if (rota === "/gerente" && req.method === "POST") {
+      const tenant = await tenantPorSlug(url.searchParams.get("c"));
+      if (!tenant) return erro("Cliente não encontrado.", 404);
+      const { data: senhaOk } = await db.rpc("verificar_senha_gerente", {
+        p_tenant_id: tenant.id, p_senha: String(body.senha ?? ""),
+      });
+      if (!senhaOk) return erro("Senha incorreta.", 401);
+
+      if (body.acao === "criar") {
+        const papel = body.papel === "Regional" ? "Regional" : "Gerente";
+        const responsavel = String(body.responsavel ?? "").trim();
+        if (!responsavel) return erro("Informe seu nome.");
+        const loja = papel === "Gerente" ? (body.loja || null) : null;
+        const publico = papel === "Regional" ? (PUBLICO_POR_OPCAO[body.publico] ?? null) : null;
+        const { data: nova, error } = await db.from("rodada").insert({
+          tenant_id: tenant.id,
+          nome: (papel === "Regional" ? "Rodada regional de " : "Rodada de ") + responsavel,
+          status: "aberta", segundos: 30, podio: loja ? "loja" : "geral",
+          responsavel, travada: true, grupo: true, loja, publico,
+          criada_por: "gerente", aberta_em: new Date().toISOString(),
+        }).select("id").single();
+        if (error || !nova) return erro("Não foi possível criar a rodada.", 500);
+        return json(await verRodada(nova.id));
+      }
+
+      const { data: rodada } = await db.from("rodada").select("id,grupo")
+        .eq("id", body.id).eq("tenant_id", tenant.id).maybeSingle();
+      if (!rodada || !rodada.grupo) return erro("Rodada não encontrada.", 404);
+      const id = rodada.id;
+
+      if (body.acao === "ver") return json(await verRodada(id));
+
+      if (body.acao === "comecar") {
+        await db.from("rodada").update({ travada: false }).eq("id", id).eq("status", "aberta");
+        await db.from("jogador").update({
+          situacao: "em-jogo", indice_atual: 0, pergunta_iniciada_em: new Date().toISOString(),
+        }).eq("rodada_id", id).eq("situacao", "aguardando");
+        await emitirRanking(id);
+        return json(await verRodada(id));
+      }
+
+      if (body.acao === "resetar") {
+        const { data: jogadores } = await db.from("jogador").select("id").eq("rodada_id", id);
+        const ids = (jogadores ?? []).map((j) => j.id);
+        if (ids.length) await db.from("resposta").delete().in("jogador_id", ids);
+        await db.from("jogador").update({
+          pontos: 0, acertos: 0, erros: 0, situacao: "aguardando", indice_atual: 0, pergunta_iniciada_em: null,
+        }).eq("rodada_id", id);
+        await db.from("rodada").update({ travada: true }).eq("id", id);
+        await emitirRanking(id);
+        return json(await verRodada(id));
+      }
+
+      if (body.acao === "encerrar") {
+        await db.from("rodada").update({ status: "encerrada", encerrada_em: new Date().toISOString() }).eq("id", id);
+        await emitirRanking(id);
+        return json(await verRodada(id));
+      }
+
+      return erro("Ação inválida: " + body.acao);
     }
 
     // ---------------- GET /ranking ----------------
