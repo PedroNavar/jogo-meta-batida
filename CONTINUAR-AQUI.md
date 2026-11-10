@@ -136,13 +136,38 @@ O frontend chama rotas relativas `/api/...` e usa `EventSource('/api/eventos')`.
    O contrato de `config?c=sipolatti` precisa do slug do tenant — o frontend tem que
    mandar `?c=sipolatti` (ou resolver tenant por subdomínio depois).
 
-### Passo 2 — Publicar o frontend num host estático grátis
-Opções grátis: Cloudflare Pages, GitHub Pages, ou Supabase Storage (bucket público).
-Só arquivos estáticos. Depois, dá pra jogar entre celulares e sentir o pódio ao vivo.
+### Passo 2 — Publicar o frontend num host estático grátis — ✅ FEITO em 2026-11-10
+Publicado via **GitHub Pages**, grátis (repo público): https://pedronavar.github.io/jogo-meta-batida/
+Repo: https://github.com/PedroNavar/jogo-meta-batida (separado do segundo cérebro).
+Deploy automático via `.github/workflows/pages.yml` a cada push em `frontend/`.
+Precisou trocar os caminhos absolutos (`/css`, `/js`, `/img`) por relativos — GitHub Pages
+de projeto serve numa subpasta (`/jogo-meta-batida/`), não na raiz do domínio.
 
-### Passo 3 — Endpoints de ADMIN e GERENTE (ainda NÃO existem na função)
+### Passo 3a — Endpoint de GERENTE — ✅ FEITO em 2026-11-10 (admin ainda falta)
+`POST /gerente` implementado em `api/index.ts` (acoes: criar/ver/comecar/resetar/encerrar).
+Senha verificada via **pgcrypto** (bcrypt) no próprio Postgres — funções
+`verificar_senha_gerente/admin` e `definir_senha_gerente/admin` em
+`supabase/migrations/20261110164300_senhas_gerente_admin.sql`. **A Edge Function nunca
+lê o hash puro**, só chama a função via `.rpc()`. As senhas reais de cada tenant foram
+definidas à parte (fora do git, repo é público — ver memória da sessão ou perguntar ao Pedro).
+`ver`/`comecar`/`resetar`/`encerrar` só funcionam em rodadas com `grupo=true` (criadas pelo
+próprio gerente); a rodada "principal" de cada tenant (ex.: "Teste motor", "Meta Batida
+Vilarejo") só pode ser controlada por **admin** — que ainda não existe (resto do Passo 3).
+
+### Multi-cliente: Vilarejo — ✅ primeiro cliente replicado, em 2026-11-10
+Tenant `vilarejo` criado (schema já era multi-tenant desde o início): 9 lojas, 20 perguntas
+(30s cada), 1 rodada aberta (`travada=false`, autoatendimento — sem painel de admin ainda
+pra essa rodada principal) e a lista de 9 vendedores esperados. Frontend: **mesmo `css/`
+e `js/` da Sipolatti**, só o HTML + logo mudam, numa subpasta própria
+(`frontend/vilarejo/`, publicada em `/vilarejo/`). `config.js` agora resolve o tenant pelo
+nome da subpasta na URL (lista `CLIENTES_CONHECIDOS`), não mais fixo em `'sipolatti'` —
+**replicar pra um cliente novo = criar a subpasta + o tenant no banco**, sem duplicar JS/CSS.
+Link: https://pedronavar.github.io/jogo-meta-batida/vilarejo/
+Também corrigido: `gerente.js`/`admin.js` geravam os links de telão/jogo com
+`location.origin` (perdia a subpasta); agora usam `baseUrl()` (`new URL('.', location.href)`).
+
+### Passo 3b — Endpoints de ADMIN (ainda NÃO existem na função)
 Implementar no mesmo `api/index.ts` (ou função separada) conforme docs/contrato-api.md:
-- Gerente: `POST /api/gerente` (acoes: criar/ver/comecar/resetar/encerrar) + senha.
 - Admin (sessão por cookie no original — no novo, pode ser login que devolve um token de
   admin, ou Supabase Auth): `/api/login`, `/api/admin/estado|presenca|ranking|a-postos|
   csv|upload|perguntas|editar|aprovar|remover|lista|liberar|rodadas|abrir|comecar-todos|
