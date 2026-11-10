@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Criar uma rodada · Meta Batida Sipolatti</title><link rel="stylesheet" href="/css/jogo.css"><script type="module" src="/js/gerente.js"></script></head>
+<body>
+<header class="marca"><img class="logo-cliente" src="/img/logo-sipolatti.svg" alt="Sipolatti" width="150" height="42"><span><img class="logo-jogo" src="/img/logo-jogo.png" alt="Jogo da Meta Batida" width="900" height="294"></span><img class="logo-metta" src="/img/logo-metta.svg" alt="Metta" width="120" height="26"></header>
+<main class="pagina-rodada">
+<section id="criar"><p class="sobretitulo">GERENTES E REGIONAIS</p><h1>Criar uma <em>rodada</em></h1>
+<form id="formulario"><div class="campo"><label for="papel">Você é</label><select id="papel" required><option value="">Escolha seu cargo</option><option>Gerente</option><option>Regional</option></select></div>
+<div id="campo-nome-lista" class="campo" hidden><label for="nome-lista">Escolha seu nome</label><select id="nome-lista"></select></div>
+<div id="campo-nome" class="campo"><label for="nome">Seu nome</label><input id="nome" minlength="2" maxlength="60" autocomplete="name" required></div>
+<div id="campo-loja" hidden><label for="loja">Sua loja</label><select id="loja"><option value="">Escolha sua loja</option></select></div>
+<div id="campo-publico" class="campo-amplo" hidden><label for="publico">Para quem é a rodada</label><select id="publico"><option value="">Escolha</option><option value="vendedores">Vendedores</option><option value="gerentes">Gerentes</option><option value="ambos">Vendedores e gerentes</option></select></div>
+<div class="campo-amplo"><label for="senha">Senha</label><input id="senha" type="password" autocomplete="off" required></div>
+<button id="criar-botao" class="principal">Criar uma rodada</button></form></section>
+<section id="criada" hidden><p class="sobretitulo">RODADA ABERTA</p><h1 id="nome-rodada"></h1><p id="contagem" class="contagem"></p>
+<h2>Link para a equipe</h2><p class="copiar"><input id="link-jogo" readonly aria-label="Link do jogo"><button id="copiar" type="button" class="discreto">Copiar</button></p><p><a id="whatsapp" class="discreto botao-link" target="_blank" rel="noopener">Enviar pelo WhatsApp</a></p>
+<h2>Telão para compartilhar</h2><p class="copiar"><input id="link-telao" readonly aria-label="Link do telão"><a id="abrir-telao" class="discreto" target="_blank" rel="noopener">Abrir</a></p>
+<div class="controle"><button id="comecar-todos" type="button" class="principal">Começar para todos</button><button id="resetar" type="button" class="discreto">Resetar jogo</button><button id="encerrar" type="button" class="discreto">Encerrar rodada</button></div><h2>A postos</h2><ul id="a-postos" class="lista-postos"></ul></section>
+<p id="status" class="status" role="status"></p>
+</main></body></html>

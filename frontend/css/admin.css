@@ -1,0 +1,55 @@
+/* Operação: superfície clara, navegação discreta, tabelas com contraste. */
+.pagina-admin{background:#EFF3F5;color:var(--tinta)}
+.admin{max-width:1240px;margin:40px auto;padding:0 24px}
+.admin>.sobretitulo{color:var(--cinza-azul);margin:0 0 8px}
+.admin>h1{font-size:clamp(28px,3vw,40px);margin:0 0 24px}
+.admin #mensagem{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--cinza-azul);font-weight:600}
+.admin #mensagem:empty{display:none}
+.admin .painel{background:var(--branco);padding:32px;border-radius:16px}
+.admin #login{max-width:480px;margin-top:32px}
+.admin #login h2{margin-bottom:24px}
+.admin #login button{width:100%;margin-top:20px}
+.admin nav,.barra{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+#aplicacao>.barra{justify-content:flex-end;margin-bottom:8px}
+.admin nav{gap:4px;margin:0 0 24px;border-bottom:1px solid var(--aco);padding-bottom:8px}
+.admin nav button{background:transparent;color:var(--cinza-azul);border-radius:8px;padding:12px 20px}
+.admin nav button:hover{background:var(--gelo)}
+.admin nav button[aria-current=true]{background:var(--ardosia);color:var(--branco)}
+.admin button{min-height:44px}
+.admin .principal{width:auto;margin:0;padding:12px 24px;font-size:12px}
+.admin .discreto{background:var(--gelo);color:var(--tinta)}
+.admin .discreto:hover:enabled{background:#C9DAE3}
+.admin :focus-visible{outline-color:var(--cinza-azul)}
+.admin label{margin:20px 0 8px;color:var(--cinza-azul)}
+.admin input,.admin select,.admin textarea{max-width:100%;border-color:var(--cinza-azul)}
+.admin textarea{min-height:144px;resize:vertical}
+.admin input[type=file]{height:auto;white-space:normal;font-size:14px}
+.admin form{margin:24px 0 32px;max-width:800px}
+.admin form h2{margin-top:24px}
+.admin form>p{font-size:14px;color:var(--cinza-azul);margin:12px 0}
+.admin #conteudo>h2{font-size:26px;margin-bottom:24px}
+.admin #conteudo>select{max-width:480px}
+.tabela-container{width:100%;max-height:65vh;overflow:auto;overscroll-behavior:contain;margin-top:24px;border:1px solid #C9DAE3;border-radius:12px}
+.admin table{border-collapse:collapse;width:100%;min-width:600px;text-align:left;font-size:14px}
+.admin th,.admin td{padding:16px;border-bottom:1px solid #C9DAE3;max-width:350px;overflow-wrap:anywhere;vertical-align:middle}
+.admin th{position:sticky;top:0;background:var(--gelo);color:var(--cinza-azul);font-size:12px;font-weight:600;z-index:1}
+.admin tbody tr:nth-child(even){background:#FAFCFD}
+.admin tbody tr:hover{background:var(--gelo)}
+.admin tr:last-child td{border-bottom:0}
+.admin article{border-top:1px solid #C9DAE3;padding:24px 0;margin-top:24px;overflow-wrap:anywhere}
+.admin article h2{font-size:20px;max-width:920px}
+.admin article img{display:block;width:100%;height:180px;object-fit:contain;margin:20px 0}
+.admin article p{margin:12px 0}
+.selo{display:inline-block;padding:6px 12px;border-radius:6px;background:var(--gelo);color:var(--cinza-azul);font-size:12px;font-weight:600;margin-right:12px}
+.selo.aprovada{background:var(--ardosia);color:var(--branco)}
+.aviso-admin{background:var(--gelo);color:var(--tinta);border-left:4px solid var(--cinza-azul);padding:16px;font-weight:600}
+.admin dialog{width:min(90vw,520px);max-height:85dvh;overflow:auto;padding:32px;border:1px solid var(--cinza-azul);border-radius:16px;background:var(--branco);color:var(--tinta)}
+.admin dialog::backdrop{background:var(--noite);opacity:.85}
+.admin dialog .barra{justify-content:flex-end;margin:24px 0 0}
+.admin a{color:var(--cinza-azul);font-weight:600;text-underline-offset:4px}
+.admin .grade{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media(max-width:600px){
+ .admin{padding:0 12px;margin:24px auto}.admin .painel{padding:20px 16px}.admin h1{font-size:28px}.admin nav button{font-size:13px;padding:10px 12px}.admin .grade{grid-template-columns:1fr}
+ .admin #conteudo>h2{font-size:22px}.admin article h2{font-size:18px}.admin dialog{padding:24px}.admin th,.admin td{padding:12px}
+}
+th{white-space:nowrap;overflow-wrap:normal;word-break:normal}
