@@ -321,6 +321,21 @@ Confirmar que o deploy saiu com
 `curl -s https://pedronavar.github.io/jogo-meta-batida/js/admin.js | grep -c jogador-liberar`
 (deve dar `1`+).
 
+### Pedido extra (2026-11-11, mesma sessão): lojas + lista de nomes esperados — ✅ FEITO
+Duas lacunas reais do `docs/contrato-api.md` que faltavam de verdade (não eram
+simplificação deliberada): aba **"Lojas"** no admin (`acao:"loja-salvar"`/`"loja-remover"`,
+cria/remove loja do tenant sem precisar de migration) e **"Importar lista de nomes"** por
+rodada (`acao:"lista-importar"`, cola nomes — 1 por linha, `Nome, Cargo` opcional —
+substitui a tabela `esperado` daquela rodada inteira, que alimenta o `<select>` de nomes
+no `/config`; avisa quando uma linha não tem cargo). `acao:"estado"` agora devolve quantos
+nomes esperados cada rodada já tem. Testado via curl (loja-salvar/remover, import com
+aviso de cargo faltando, confirmado no `/config`) e no admin da Vilarejo no browser.
+Commit `f2797d5`. **Pendência conhecida:** `lista-importar` com texto vazio dá erro e não
+limpa a lista (fica pelo menos o último import válido) — ficou 1 nome de teste
+("Fulano de Teste") na rodada encerrada `20eb7e19-...` da Vilarejo; irrelevante (rodada
+fechada), mas se quiser zerar de verdade é só rodar
+`delete from esperado where rodada_id='20eb7e19-8c7c-49f0-9c1f-268d714895ac';` numa migration.
+
 ### Pedido extra (2026-11-11, mesma sessão): liberar jogador duplicado — ✅ FEITO
 Faltava a ação que o próprio erro do `/entrar` já citava ("peça ao instrutor para
 liberar") — não existia nenhum endpoint pra isso. Adicionado `acao:"jogador-liberar"` em
