@@ -4,9 +4,10 @@
 > Idioma do Pedro: português. Ele prefere ação direta (executar, não perguntar à toa)
 > e corrigir a causa, não o sintoma. Avise antes de ação cara/inédita.
 >
-> **⚠️ COMECE PELA SEÇÃO 10** ("Pedidos do Pedro em 2026-11-11") — é o trabalho pendente
-> mais recente, pedido explicitamente ANTES de ser implementado (sessão no limite semanal).
-> O resto do documento é o histórico de como chegamos até aqui.
+> **A seção 10** ("Pedidos do Pedro em 2026-11-11") tem os 7 pedidos mais recentes — todos
+> já implementados e testados (painel admin novo: rodadas com trava, perguntas em lote,
+> blocos, lixeira, CSV detalhado, tela de feedback). Leia as "Limitações conhecidas" no fim
+> dela antes de expor o admin pra mais alguém além do Pedro.
 
 ## 1. O objetivo
 
@@ -212,105 +213,85 @@ Implementar no mesmo `api/index.ts` (ou função separada) conforme docs/contrat
 - Perguntas `base=true` (Venda 4.0) compartilhadas: ao criar um tenant novo, copiar as base.
 - Painel admin central da Metta vendo todos os tenants (futuro).
 
-## 10. PEDIDOS DO PEDRO EM 2026-11-11 — NENHUM AINDA IMPLEMENTADO
+## 10. PEDIDOS DO PEDRO EM 2026-11-11 — ✅ TODOS IMPLEMENTADOS e testados em 2026-11-11
 
-> Pedro pediu pra registrar tudo aqui ANTES de implementar (estava perto do limite semanal
-> de uso). Nenhum item abaixo foi codado ainda. Ordem sugerida: #3 e #4 e #6 e #7 são todos
-> parte do painel de ADMIN (Passo 3b) — vale desenhar o admin inteiro já com eles em mente,
-> em vez de implementar o Passo 3b "genérico" do contrato antigo e depois remendar. #1 é
-> pequeno e independente, pode ser o primeiro a sair. #2 também é admin, mas pode vir depois.
+> Registrados antes de implementar (sessão perto do limite semanal), e implementados na
+> sessão seguinte, no mesmo dia. Todos testados via curl E no browser (local, porta 5180).
+> Deployado: função redeployada, 4 migrations aplicadas, frontend publicado no GitHub Pages.
 
-### #1 — Tela de "você acertou / errou + pontos" antes de carregar a próxima pergunta
-O Pedro notou que essa tela (existe no sistema antigo) não aparece no motor novo, e
-suspeitava que fosse a causa do cronômetro furado (não é — isso já foi corrigido à parte,
-ver "Correção do CRONÔMETRO" acima — mas a tela de feedback REALMENTE falta e precisa ser
-ligada, até pra reduzir mais um round-trip de rede).
-**Causa raiz (já investigada):** `POST /api/responder` já devolve `feedback:{mensagem,
-pontos,restanteMs}` embutido na resposta (`supabase/functions/api/index.ts`, rota
-`/responder`, `estadoDe(bearer, feedback)`). Mas `frontend/js/jogador.js`, função
-`responder()`, **descarta essa resposta** (`await enviarResposta(...)` sem guardar o
-retorno) e, no `finally`, chama `sincronizar()` — que faz um **outro** `GET /api/jogador`
-que NUNCA inclui feedback. Resultado: a tela de feedback nunca é montada.
-**O que fazer:** em `responder()`, capturar o retorno de `enviarResposta(...)` e, se vier
-um objeto de estado válido (não `null`/409), chamar `renderizar(e)` diretamente com ele
-(que já sabe desenhar a tela de feedback — olhar `if(e.feedback){mostrar('feedback');...}`
-em `renderizar()`), **em vez de** chamar `sincronizar()` de novo. Só cair pro `sincronizar()`
-se `enviarResposta` retornar `null` (409/timeout). Isso também elimina 1 round-trip de rede
-por resposta — jogo fica mais rápido e mais fiel ao tempo real de cada pergunta.
-A UI da tela de feedback (`#feedback`, `#mensagem-feedback`) já existe no HTML/CSS — não
-precisa desenhar nada novo, só religar o fluxo de dados.
+### #1 — Tela de "você acertou / errou + pontos" — ✅ FEITO
+`frontend/js/jogador.js`, `responder()`: agora usa a resposta direta de `/api/responder`
+(já vem com `feedback` embutido) chamando `renderizar(e)` com ela, em vez de descartá-la e
+buscar de novo via `sincronizar()` (que nunca incluía feedback — essa era a causa raiz).
+Também elimina 1 round-trip de rede por resposta. Testado: "Você acertou! +923 pontos"
+aparece corretamente antes da próxima pergunta carregar.
 
-### #2 — Painel ADM: detalhe de respostas por jogador + CSV com colunas de pergunta
-Hoje a tabela `resposta` já guarda tudo isso (`jogador_id, ordem, opcao, acertou, pontos,
-ms`) — só falta expor. Quando existir o endpoint de ranking do admin (`GET
-/api/admin/ranking?rodadaId=`, ver Passo 3b), ele deve permitir também buscar o detalhe de
-UM jogador: `GET /api/admin/jogador?id=` devolvendo, pra cada pergunta da rodada (na ordem
-congelada em `rodada_pergunta`), o texto/tema, a opção escolhida, se acertou e os pontos.
-No frontend do admin, clicar no nome do jogador na lista de ranking abre esse detalhe.
-No CSV (`GET /api/admin/csv?rodadaId=`), acrescentar colunas por pergunta (ex.: 1 coluna
-"P1 resposta" + "P1 acertou" pra cada uma das perguntas da rodada, além das colunas que já
-existem: nome, cargo, loja, acertos, erros, pontos). Com rodadas de 20 perguntas o CSV fica
-largo, mas foi exatamente isso que ele pediu ("colunas ali das perguntas... pra auditar").
+### #2 — Painel ADM: detalhe por jogador + CSV com colunas de pergunta — ✅ FEITO
+`POST /admin {acao:"jogador-detalhe", jogadorId}` devolve, pra cada pergunta da rodada
+congelada: texto, tema, opção escolhida, opção **correta** (gabarito — só aparece aqui,
+nunca pro jogador/telão) e se acertou. No admin novo (`frontend/js/admin.js`), clicar no
+nome na lista de "Ver ranking" abre esse detalhe num `<dialog>`.
+`GET /admin/csv?c=&rodadaId=&senha=` devolve CSV (BOM UTF-8, delimitado por vírgula) com
+nome/cargo/loja/pontos/acertos/erros + 2 colunas por pergunta ("P1 resposta","P1 certo", …).
+Testado via curl: saída conferida linha a linha, bate com o que o jogador respondeu.
 
-### #3 — Início da rodada só quando o ADM mandar (todo mundo começa junto)
-Isso **já existe em parte**: o campo `rodada.travada` (boolean) já faz exatamente esse
-gate — quando `travada=true`, o jogador entra mas fica preso na tela de instruções
-("Aguarde o instrutor"), o botão Começar fica desabilitado (`jogador.js`, função
-`renderizar()`: `$('comecar').disabled=travada`). E o `/gerente` (ação `"comecar"`) já
-destrava e inicia todo mundo que estava "aguardando" de uma vez (`api/index.ts`, rota
-`/gerente`, bloco `if (body.acao === "comecar")`).
-**O que falta:** isso só funciona hoje pra rodadas "de grupo" (`grupo=true`, criadas via
-`/gerente`). A rodada PRINCIPAL de cada tenant (a que o admin cria/controla, tipo a atual
-"Meta Batida Vilarejo") não tem painel nenhum ainda — por isso ela foi deixada
-`travada=false` (destravada, auto-atendimento) na migration de seed, só pra dar pra jogar
-sem precisar de admin. **Quando o Passo 3b (admin) for implementado:** a rodada principal
-deve nascer com `travada=true` por padrão, e o endpoint de admin precisa de uma ação
-equivalente ao `comecar` do gerente (`POST /api/admin/comecar-todos` já está previsto no
-contrato antigo — só implementar com a mesma lógica que o `/gerente` já usa: destrava a
-rodada + marca todos os `aguardando` como `em-jogo` com `pergunta_iniciada_em=null`, pra já
-sair com o cronômetro corrigido do item acima).
+### #3 — Início só quando o ADM mandar — ✅ FEITO
+Rodadas criadas pelo admin (`acao:"rodada-criar"`) nascem **sempre `travada=true`**.
+`acao:"rodada-comecar-todos"` (reaproveita a mesma lógica do `/gerente`, extraída pra
+`comecarTodos()`) destrava a rodada e põe todo "aguardando" em "em-jogo" de uma vez, com
+`pergunta_iniciada_em=null` (cronômetro de cada um só começa quando ELE buscar a 1ª
+pergunta — não quando o admin aperta o botão). Testado via curl: jogador tenta `/comecar`
+com a rodada travada → continua "aguardando"; admin chama `rodada-comecar-todos` → jogador
+consegue começar. A rodada principal da Vilarejo (criada antes desse recurso existir)
+**continua `travada=false`** (auto-atendimento) — se quiser trocar pra exigir start do
+admin, rodar `update rodada set travada=true where id='44444444-...'` numa migration nova.
 
-### #4 — Blocos de perguntas (separar por "leva" e escolher o bloco ao criar a rodada)
-Hoje a tabela `pergunta` não tem conceito de bloco: `congelar()` (em `api/index.ts`) pega
-TODAS as perguntas do tenant com `ativa=true AND status='aprovada'`, ordenadas por
-`criado_em`, até 20. Pra separar em blocos:
-- Schema: nova coluna, ex. `pergunta.bloco text` (simples, um rótulo livre tipo "Bloco 1",
-  "Bloco 2" — ou uma tabela `bloco(id, tenant_id, nome)` se quiser blocos com nome/ordem
-  próprios; o rótulo livre resolve o pedido com menos migration).
-- `rodada` ganha uma referência a qual bloco usar (`rodada.bloco text`, preenchido na
-  criação). `congelar()` passa a filtrar também por `pergunta.bloco = rodada.bloco`.
-- No admin: ao criar pergunta, escolher/digitar o bloco; ao criar rodada, escolher entre os
-  blocos que já têm pergunta cadastrada.
+### #4 — Blocos de perguntas — ✅ FEITO
+Migration `20261111091534_admin_blocos_exclusao.sql`: `pergunta.bloco text` (rótulo livre,
+null = sem bloco) e `rodada.bloco text` (qual bloco usar; null = todas as perguntas do
+tenant, comportamento antigo preservado). `congelar()` em `api/index.ts` filtra por
+`pergunta.bloco` quando `rodada.bloco` está definido. No admin: cadastro de pergunta tem
+campo "Bloco"; criar rodada tem um `<select>` com os blocos que já têm pergunta. Testado
+via curl: rodada criada com `bloco:"Bloco QA"` só puxou as 2 perguntas daquele bloco (de um
+total de 5+ do tenant).
 
-### #5 — Imagem da pergunta é opcional (já é no banco; falta a UI não exigir)
-`pergunta.imagem` já é `text` nullable no schema (`supabase/schema.sql`) — nenhuma mudança
-de banco necessária. O que falta é só a UI/endpoint de cadastro (item #6 abaixo) não tratar
-o anexo como obrigatório.
+### #5 — Imagem da pergunta é opcional — ✅ FEITO (era só a UI; o banco já permitia)
+Cadastro em lote aceita pergunta sem imagem (campo vazio = `null`, não bloqueia). **Mas:
+não existe upload de arquivo** — o campo é uma URL de imagem (texto), não um seletor de
+arquivo/Storage. Se precisar de upload de verdade (bucket do Supabase Storage), isso ainda
+não foi feito — ficou mais simples assim e resolve o pedido original (imagem nunca
+obrigatória), mas é uma limitação a saber.
 
-### #6 — Cadastro de perguntas em LOTE, sem exigir anexo, tipo "+ nova linha"
-Isso é o mais importante pros dois casos de uso do Pedro: ele cadastrando várias de uma vez
-na mão, E a automação dele (que hoje trava porque não consegue anexar arquivo no fluxo
-antigo, que exige anexo → pergunta → anexo → enviar, um de cada vez).
-- `POST /api/admin/perguntas` deve aceitar um **array** de perguntas de uma vez
-  (`{ perguntas: [ {texto,tipo,tema,opcoes,correta,segundos,bloco,imagem?}, ... ] }`),
-  cada uma com imagem **opcional** (pode vir `null`/ausente, sem bloquear a criação).
-  Upload de imagem continua existindo à parte (`/api/admin/upload`) — dá pra criar a
-  pergunta sem imagem e anexar depois, editando.
-- No frontend do admin: formulário com botão "+ nova pergunta" que acumula várias linhas
-  num só envio (em vez de um formulário por pergunta com envio imediato).
-- Isso destrava a automação do Pedro — ela passa a conseguir cadastrar pergunta sem
-  precisar resolver anexo de imagem no meio do fluxo.
+### #6 — Cadastro de perguntas em LOTE — ✅ FEITO
+Painel admin (aba "Perguntas"): botão "+ Nova pergunta" adiciona uma linha de formulário
+(texto, tipo, tema, 4 opções, correta, segundos, bloco, imagem — só texto/opções/correta
+são obrigatórios); "Salvar todas" manda tudo de uma vez pra
+`POST /admin {acao:"perguntas-criar", perguntas:[...]}`, que insere o lote inteiro
+(`status:'aprovada', ativa:true` direto — **sem etapa de aprovação separada**, diferente do
+sistema antigo; foi uma simplificação deliberada, já que o próprio admin que cadastra).
+Isso também destrava a automação do Pedro: ela pode chamar essa rota direto com um array de
+perguntas sem imagem, sem precisar resolver upload de arquivo no meio do fluxo.
 
-### #7 — Excluir pergunta (lixeira) além de ocultar
-"Ocultar" já existe no schema: `pergunta.ativa` (false = oculta, mas continua ativa pra
-reativar — é o que o `POST /api/admin/remover` do contrato antigo faz hoje, "desativa").
-O Pedro quer uma AÇÃO SEPARADA de "excluir", que joga a pergunta numa lista/pasta de
-exclusão de onde dá pra restaurar (diferente de só ocultar). Proposta mais simples:
-- Nova coluna `pergunta.excluida_em timestamptz` (null = não excluída).
-- `POST /api/admin/excluir {id}` → seta `excluida_em = now()`.
-- `POST /api/admin/restaurar {id}` → volta `excluida_em = null`.
-- Listagem de perguntas (`GET /api/admin/estado` ou uma rota própria) separa "ativas",
-  "ocultas" (`ativa=false, excluida_em is null`) e "excluídas" (`excluida_em is not null`).
+### #7 — Lixeira de perguntas excluídas (separado de ocultar) — ✅ FEITO
+Migration adiciona `pergunta.excluida_em timestamptz` (null = não excluída). No admin, 3
+listas: Ativas (`ativa=true, excluida_em null`), Ocultas (`ativa=false, excluida_em null`,
+ação "Reativar") e Excluídas (`excluida_em not null`, ação "Restaurar" — **só limpa
+`excluida_em`, não mexe no `ativa`**: uma pergunta oculta que foi excluída volta oculta, não
+ativa). Testado via curl: ocultar → excluir → aparece em "excluídas" → restaurar → volta
+pra "ocultas" (não pra "ativas") — confirmado.
+
+### Limitações conhecidas desta implementação (decisões deliberadas, não bugs)
+- **Sem sessão de admin de verdade**: cada chamada de `/admin` manda a senha no corpo (o
+  `admin.js` guarda em memória depois do login), igual ao `/gerente` — mais simples que
+  cookie/token, mas a senha late na aba do navegador enquanto a sessão dura.
+- **CSV manda a senha na query string** (`GET /admin/csv?...&senha=`) pra poder ser um link
+  clicável/`target=_blank` — aceitável pro uso do Pedro, mas não é o ideal de segurança
+  (senha pode ficar no histórico do navegador).
+- **Sem upload de imagem de verdade** (ver #5 acima) — campo é só uma URL.
+- Essas 3 limitações eram parte do escopo original do Passo 3b/contrato antigo
+  (sessão por cookie, upload pra Storage) que foi conscientemente simplificado agora pra
+  entregar os 7 pedidos rápido. Rotacionar/revisar antes de abrir o admin pra alguém além
+  do Pedro.
 
 ## 8. Pendências de SEGURANÇA (não esquecer)
 - A **senha do admin do jogo atual** da Sipolatti e a senha de criar rodada estão em
