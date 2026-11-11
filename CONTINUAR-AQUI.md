@@ -309,15 +309,28 @@ ação "Reativar") e Excluídas (`excluida_em not null`, ação "Restaurar" — 
 ativa). Testado via curl: ocultar → excluir → aparece em "excluídas" → restaurar → volta
 pra "ocultas" (não pra "ativas") — confirmado.
 
-### ⚠️ PENDÊNCIA IMEDIATA (sessão interrompida aqui, créditos acabando)
-O fix abaixo (links de jogo/telão no admin) já foi commitado e pushado (commit
-`4a31014`/`8a3b799`), mas o deploy do GitHub Pages ficou **"queued" por vários minutos**
-sem terminar (run `43097253120`) — incomum, pode ser fila do GitHub Actions ou travou.
-**Primeira coisa a fazer na próxima sessão:** checar
-`gh run list --workflow="Publicar frontend no GitHub Pages" --limit 3` e, se ainda não
-tiver rodado, disparar de novo com `gh workflow run "Publicar frontend no GitHub Pages"`.
-Confirmar com `curl -s https://pedronavar.github.io/jogo-meta-batida/js/admin.js | grep -c linkCopiavel`
-(deve dar `1`+ se o deploy novo já foi).
+### ⚠️ Deploy do GitHub Pages travado em 2026-11-11 — causa: outage do GitHub Actions
+O run `43097253120` ficou "queued" por mais de 10 min sem nenhum job aparecer
+(`gh run view` mostrava JOBS vazio). Confirmado em https://www.githubstatus.com: era um
+**outage confirmado do GitHub Actions** ("degraded availability"/"Major Outage"), não bug
+do repo nem do workflow (`concurrency: cancel-in-progress` está certo). Disparar de novo
+(`gh workflow run "Publicar frontend no GitHub Pages"`) não ajuda enquanto o outage durar
+— o run novo também fica "queued". **Se isso se repetir:** checar githubstatus.com antes
+de desconfiar do repo; só esperar o GitHub normalizar (os runs processam sozinhos depois).
+Confirmar que o deploy saiu com
+`curl -s https://pedronavar.github.io/jogo-meta-batida/js/admin.js | grep -c jogador-liberar`
+(deve dar `1`+).
+
+### Pedido extra (2026-11-11, mesma sessão): liberar jogador duplicado — ✅ FEITO
+Faltava a ação que o próprio erro do `/entrar` já citava ("peça ao instrutor para
+liberar") — não existia nenhum endpoint pra isso. Adicionado `acao:"jogador-liberar"` em
+`POST /admin` (apaga a linha de `jogador`; `resposta` cai em cascata via FK) e um botão
+"Liberar" ao lado de cada jogador em "Ver ranking" no admin (`frontend/js/admin.js`).
+Testado via curl na Vilarejo: jogador de teste criado → `/entrar` de novo deu 409 →
+`jogador-liberar` com senha errada deu 401 → com senha certa liberou → `/entrar` de novo
+funcionou com o mesmo nome. Testado no browser (admin da Vilarejo, porta 5180): botão
+"Liberar" aparece certinho no ranking. Deployado (função) e commitado/pushado
+(commit `013f918`) — deploy do Pages sujeito ao outage acima.
 
 ### Bug real encontrado pelo Pedro: admin não mostrava o link da rodada — ✅ CORRIGIDO
 Rodada criada pelo admin não tinha como ser compartilhada: só `/gerente.html` mostrava os
