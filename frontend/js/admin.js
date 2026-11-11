@@ -182,9 +182,16 @@ $('salvar-lote').addEventListener('click',async()=>{
   await atualizar();
  } catch(err) {mensagem(err.message);}
 });
+$('copiar-base').addEventListener('click',async()=>{
+ try {
+  const r=await chamar('perguntas-copiar-base');
+  mensagem(r.copiadas?`${r.copiadas} pergunta(s) base copiada(s).`:'Nenhuma pergunta base nova pra copiar (já estão todas aqui).');
+  await atualizar();
+ } catch(err) {mensagem(err.message);}
+});
 function linhaPerguntaExistente(p,acoes) {
  const div=elemento('article',undefined,'painel');
- div.append(elemento('p',p.texto));
+ div.append(elemento('p',(p.base?'[Base] ':'')+p.texto));
  if(p.bloco)div.append(elemento('p','Bloco: '+p.bloco));
  const barra=elemento('div',undefined,'barra');
  for(const [texto,fn] of acoes)barra.append(botao(texto,fn));

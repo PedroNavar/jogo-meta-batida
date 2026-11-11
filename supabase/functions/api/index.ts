@@ -436,9 +436,9 @@ Deno.serve(async (req) => {
             esperados: esperadosPorRodada.get(r.id) ?? 0,
           })),
           perguntasAtivas: ps.filter((p: any) => !p.excluida_em && p.ativa)
-            .map((p: any) => ({ id: p.id, texto: p.texto, tipo: p.tipo, tema: p.tema, opcoes: p.opcoes, correta: p.correta, segundos: p.segundos, imagem: p.imagem, bloco: p.bloco })),
+            .map((p: any) => ({ id: p.id, texto: p.texto, tipo: p.tipo, tema: p.tema, opcoes: p.opcoes, correta: p.correta, segundos: p.segundos, imagem: p.imagem, bloco: p.bloco, base: p.base })),
           perguntasOcultas: ps.filter((p: any) => !p.excluida_em && !p.ativa)
-            .map((p: any) => ({ id: p.id, texto: p.texto, tipo: p.tipo, tema: p.tema, opcoes: p.opcoes, correta: p.correta, segundos: p.segundos, imagem: p.imagem, bloco: p.bloco })),
+            .map((p: any) => ({ id: p.id, texto: p.texto, tipo: p.tipo, tema: p.tema, opcoes: p.opcoes, correta: p.correta, segundos: p.segundos, imagem: p.imagem, bloco: p.bloco, base: p.base })),
           perguntasExcluidas: ps.filter((p: any) => p.excluida_em)
             .map((p: any) => ({ id: p.id, texto: p.texto, bloco: p.bloco, excluidaEm: p.excluida_em })),
           blocos, lojas: lojas ?? [],
@@ -464,6 +464,26 @@ Deno.serve(async (req) => {
         const { error } = await db.from("pergunta").insert(linhas);
         if (error) return erro("Não foi possível cadastrar: " + error.message, 500);
         return json({ criadas: linhas.length });
+      }
+      // ---- copia as perguntas "base" (Venda 4.0, compartilhadas entre clientes) de
+      // qualquer tenant pra este — pra um cliente novo começar com o banco de perguntas
+      // padrão da Metta sem reescrever. Pula as que já existem (por texto igual) pra
+      // poder chamar de novo sem duplicar. -------------------------------------------
+      if (acao === "perguntas-copiar-base") {
+        const { data: base } = await db.from("pergunta").select("*").eq("base", true).is("excluida_em", null);
+        const { data: existentes } = await db.from("pergunta").select("texto").eq("tenant_id", tenant.id);
+        const textos = new Set((existentes ?? []).map((p: any) => p.texto));
+        const novas = (base ?? [])
+          .filter((p: any) => p.tenant_id !== tenant.id && !textos.has(p.texto))
+          .map((p: any) => ({
+            tenant_id: tenant.id, texto: p.texto, tipo: p.tipo, tema: p.tema,
+            opcoes: p.opcoes, correta: p.correta, segundos: p.segundos, imagem: p.imagem,
+            bloco: p.bloco, status: "aprovada", ativa: true, base: true,
+          }));
+        if (!novas.length) return json({ copiadas: 0 });
+        const { error } = await db.from("pergunta").insert(novas);
+        if (error) return erro("Não foi possível copiar: " + error.message, 500);
+        return json({ copiadas: novas.length });
       }
       if (acao === "pergunta-editar") {
         const campos = ["texto", "tipo", "tema", "opcoes", "correta", "segundos", "imagem", "bloco"];
