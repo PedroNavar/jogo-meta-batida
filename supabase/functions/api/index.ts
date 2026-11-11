@@ -419,13 +419,20 @@ Deno.serve(async (req) => {
           .eq("tenant_id", tenant.id).order("criado_em", { ascending: false });
         const { data: perguntas } = await db.from("pergunta").select("*")
           .eq("tenant_id", tenant.id).order("criado_em", { ascending: false });
-        const { data: lojas } = await db.from("loja").select("filial,rotulo").eq("tenant_id", tenant.id);
+        const { data: lojas } = await db.from("loja").select("filial,nome,rotulo").eq("tenant_id", tenant.id);
+        const rodadaIds = (rodadas ?? []).map((r: any) => r.id);
+        const esperadosPorRodada = new Map<string, number>();
+        if (rodadaIds.length) {
+          const { data: esperados } = await db.from("esperado").select("rodada_id").in("rodada_id", rodadaIds);
+          for (const e of esperados ?? []) esperadosPorRodada.set(e.rodada_id, (esperadosPorRodada.get(e.rodada_id) ?? 0) + 1);
+        }
         const ps = perguntas ?? [];
         const blocos = [...new Set(ps.filter((p: any) => !p.excluida_em && p.bloco).map((p: any) => p.bloco))];
         return json({
           rodadas: (rodadas ?? []).map((r: any) => ({
             id: r.id, nome: r.nome, status: r.status, travada: r.travada, segundos: r.segundos,
             podio: r.podio, bloco: r.bloco, grupo: r.grupo, iniciada: r.iniciada,
+            esperados: esperadosPorRodada.get(r.id) ?? 0,
           })),
           perguntasAtivas: ps.filter((p: any) => !p.excluida_em && p.ativa)
             .map((p: any) => ({ id: p.id, texto: p.texto, tipo: p.tipo, tema: p.tema, opcoes: p.opcoes, correta: p.correta, segundos: p.segundos, imagem: p.imagem, bloco: p.bloco })),
@@ -499,6 +506,44 @@ Deno.serve(async (req) => {
         if (acao === "rodada-resetar") await resetarRodada(rodada.id);
         if (acao === "rodada-encerrar") await encerrarRodada(rodada.id);
         return json(await verRodada(rodada.id));
+      }
+
+      // ---- lojas do tenant: salvar (cria/edita) e remover ------------------------
+      if (acao === "loja-salvar") {
+        const filial = String(body.filial ?? "").trim();
+        const rotulo = String(body.rotulo ?? "").trim();
+        if (!filial || !rotulo) return erro("Informe filial e rótulo da loja.");
+        const { error } = await db.from("loja")
+          .upsert({ tenant_id: tenant.id, filial, nome: body.nome || null, rotulo }, { onConflict: "tenant_id,filial" });
+        if (error) return erro("Não foi possível salvar a loja: " + error.message, 500);
+        return json({ ok: true });
+      }
+      if (acao === "loja-remover") {
+        await db.from("loja").delete().eq("tenant_id", tenant.id).eq("filial", String(body.filial ?? ""));
+        return json({ ok: true });
+      }
+
+      // ---- lista de nomes esperados de 1 rodada: substitui a lista inteira pelo texto
+      // colado (1 nome por linha; "Nome,Cargo" opcional) — usada em /config pra sugerir
+      // o nome por um <select> em vez de digitar livre. ---------------------------
+      if (acao === "lista-importar") {
+        const { data: rodada } = await db.from("rodada").select("id")
+          .eq("id", body.rodadaId).eq("tenant_id", tenant.id).maybeSingle();
+        if (!rodada) return erro("Rodada não encontrada.", 404);
+        const linhas = String(body.texto ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+        const avisos: string[] = [];
+        const registros = [];
+        for (const linha of linhas) {
+          const [nome, cargo, loja] = linha.split(/[,;\t]/).map((p) => p.trim());
+          if (!nome) continue;
+          if (!cargo) avisos.push(`"${nome}": sem cargo — não vai aparecer na lista de seleção.`);
+          registros.push({ rodada_id: rodada.id, nome, cargo: cargo || null, loja: loja || null });
+        }
+        if (!registros.length) return erro("Nenhum nome encontrado no texto.");
+        await db.from("esperado").delete().eq("rodada_id", rodada.id);
+        const { error } = await db.from("esperado").insert(registros);
+        if (error) return erro("Não foi possível importar: " + error.message, 500);
+        return json({ importados: registros.length, avisos });
       }
 
       // ---- detalhe das respostas de 1 jogador (inclui gabarito — só aqui) ----

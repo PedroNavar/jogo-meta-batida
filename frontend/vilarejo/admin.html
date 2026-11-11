@@ -10,6 +10,7 @@
 <nav id="abas" aria-label="Áreas administrativas">
  <button type="button" data-aba="rodadas" class="aba-ativa">Rodadas</button>
  <button type="button" data-aba="perguntas">Perguntas</button>
+ <button type="button" data-aba="lojas">Lojas</button>
 </nav>
 
 <section id="aba-rodadas" class="painel">
@@ -35,6 +36,17 @@
  <h2>Ativas</h2><div id="lista-ativas"></div>
  <h2>Ocultas</h2><div id="lista-ocultas"></div>
  <h2>Excluídas (lixeira)</h2><div id="lista-excluidas"></div>
+</section>
+
+<section id="aba-lojas" class="painel" hidden>
+ <h2>Nova loja</h2>
+ <form id="form-loja">
+  <div class="campo"><label for="l-filial">Filial (código, ex.: 03)</label><input id="l-filial" required></div>
+  <div class="campo"><label for="l-rotulo">Rótulo (nome exibido pro jogador)</label><input id="l-rotulo" required></div>
+  <button class="principal">Salvar loja</button>
+ </form>
+ <h2>Lojas cadastradas</h2>
+ <div id="lista-lojas"></div>
 </section>
 
 <dialog id="detalhe" aria-labelledby="detalhe-titulo">

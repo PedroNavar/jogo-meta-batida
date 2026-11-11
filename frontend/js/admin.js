@@ -29,6 +29,7 @@ function desenharRodadas() {
   card.append(elemento('p',`${r.status} · ${r.travada?'travada (aguardando início)':'liberada'} · ${r.segundos}s/pergunta · pódio ${r.podio}${r.bloco?' · bloco "'+r.bloco+'"':''}`));
   card.append(linkCopiavel('Link do jogo',baseUrl()+'?r='+r.id));
   card.append(linkCopiavel('Link do telão',baseUrl()+'telao.html?r='+r.id));
+  card.append(elemento('p',r.esperados?`${r.esperados} nome(s) na lista de seleção.`:'Sem lista de nomes esperados (jogador digita o nome livremente).'));
   const barra=elemento('div',undefined,'barra');
   if(r.status==='aberta') {
    if(r.travada)barra.append(botao('Começar para todos',()=>acaoRodada('rodada-comecar-todos',r.id),'principal'));
@@ -36,6 +37,7 @@ function desenharRodadas() {
    barra.append(botao('Encerrar',async()=>{if(confirm('Encerrar '+r.nome+'? Não dá pra reabrir.'))await acaoRodada('rodada-encerrar',r.id);}));
   }
   barra.append(botao('Ver ranking',()=>verRanking(r.id)));
+  barra.append(botao('Importar lista de nomes',()=>importarLista(r.id,r.nome)));
   const csv=elemento('a','Exportar CSV','discreto');
   csv.href=API+'/admin/csv?c='+encodeURIComponent(CLIENTE)+'&rodadaId='+encodeURIComponent(r.id)+'&senha='+encodeURIComponent(senha);
   csv.target='_blank';csv.rel='noopener';
@@ -61,7 +63,27 @@ function desenharLojas() {
  sel.replaceChildren(elemento('option','Nenhuma (qualquer loja)'));sel.firstChild.value='';
  for(const l of estado.lojas){const o=elemento('option',l.rotulo);o.value=l.filial;sel.append(o);}
  sel.value=atual;
+ $('lista-lojas').replaceChildren(...estado.lojas.map(l=>{
+  const card=elemento('article',undefined,'painel');
+  card.append(elemento('p',`${l.filial} — ${l.rotulo}`));
+  const barra=elemento('div',undefined,'barra');
+  barra.append(botao('Remover',async()=>{
+   if(!confirm(`Remover a loja "${l.rotulo}"?`))return;
+   await chamar('loja-remover',{filial:l.filial});await atualizar();
+  }));
+  card.append(barra);
+  return card;
+ }));
+ if(!estado.lojas.length)$('lista-lojas').replaceChildren(elemento('p','Nenhuma loja cadastrada.'));
 }
+$('form-loja').addEventListener('submit',async e=>{
+ e.preventDefault();
+ try {
+  await chamar('loja-salvar',{filial:$('l-filial').value.trim(),rotulo:$('l-rotulo').value.trim()});
+  $('form-loja').reset();mensagem('Loja salva.');
+  await atualizar();
+ } catch(err) {mensagem(err.message);}
+});
 $('r-podio').addEventListener('change',()=>{$('r-campo-loja').hidden=$('r-podio').value!=='loja';});
 $('form-rodada').addEventListener('submit',async e=>{
  e.preventDefault();
@@ -108,6 +130,22 @@ async function verDetalheJogador(jogadorId,nome) {
   div.append(p);
  }
  abrirDetalhe(nome,div);
+}
+function importarLista(rodadaId,nomeRodada) {
+ const div=elemento('div');
+ div.append(elemento('p','1 nome por linha. Pode incluir o cargo depois de uma vírgula, ex.: "Maria Silva, Vendedor". Substitui a lista inteira dessa rodada.'));
+ const texto=elemento('textarea');texto.rows=10;texto.style.width='100%';
+ const avisos=elemento('div');
+ const salvar=botao('Importar',async()=>{
+  try {
+   const r=await chamar('lista-importar',{rodadaId,texto:texto.value});
+   avisos.replaceChildren(elemento('p',`${r.importados} nome(s) importado(s).`));
+   for(const a of r.avisos)avisos.append(elemento('p',a));
+   await atualizar();
+  } catch(err) {avisos.replaceChildren(elemento('p',err.message));}
+ },'principal');
+ div.append(texto,salvar,avisos);
+ abrirDetalhe('Lista de nomes — '+nomeRodada,div);
 }
 
 // ---- Perguntas: cadastro em lote + ativas/ocultas/excluídas ------------
@@ -203,6 +241,7 @@ for(const btn of $('abas').children) {
   for(const b of $('abas').children)b.classList.toggle('aba-ativa',b===btn);
   $('aba-rodadas').hidden=btn.dataset.aba!=='rodadas';
   $('aba-perguntas').hidden=btn.dataset.aba!=='perguntas';
+  $('aba-lojas').hidden=btn.dataset.aba!=='lojas';
  });
 }
 async function atualizar() {
