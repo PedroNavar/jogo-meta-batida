@@ -112,9 +112,13 @@ async function responder(id,opcao) {
  respondida=id;enviando=true;
  for(const [i,b] of [...$('opcoes').children].entries()){b.disabled=true;b.classList.toggle('selecionada',i===opcao);}
  try {
-  await enviarResposta({perguntaId:id,opcao},{restante,avisar:status,pedir:body=>api('/api/responder',{token,body,timeout:Math.max(1,Math.min(2500,restante()))})});
- } catch(e) {status(e.message);}
- finally {enviando=false;await sincronizar();}
+  // /api/responder já devolve o estado com o feedback (acertou/errou + pontos) embutido —
+  // usar essa resposta direto evita 1 round-trip extra e é o que faz a tela de feedback aparecer.
+  const e=await enviarResposta({perguntaId:id,opcao},{restante,avisar:status,pedir:body=>api('/api/responder',{token,body,timeout:Math.max(1,Math.min(2500,restante()))})});
+  status('');
+  if(e)renderizar(e);else await sincronizar();
+ } catch(e) {status(e.message);await sincronizar();}
+ finally {enviando=false;}
 }
 // Gerente e Regional escolhem o nome na lista; quem não está nela digita em Outro.
 function verNomes() {
