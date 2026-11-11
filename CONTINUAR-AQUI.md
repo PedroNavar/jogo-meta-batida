@@ -8,6 +8,12 @@
 > já implementados e testados (painel admin novo: rodadas com trava, perguntas em lote,
 > blocos, lixeira, CSV detalhado, tela de feedback). Leia as "Limitações conhecidas" no fim
 > dela antes de expor o admin pra mais alguém além do Pedro.
+>
+> **A seção 11 é IMPORTANTE e é nova (2026-11-11):** este repositório é a versão **da
+> Metta** (cliente Metta, branding Metta). Quando esta versão estiver pronta, o Pedro quer
+> uma **segunda versão, separada, sem nada da Metta**, pra usar com os clientes do MEI dele
+> (fora da Metta). Não confundir os dois projetos — leia a seção 11 antes de supor que "está
+> tudo pronto" signifique este repo também serve pra clientes de fora.
 
 ## 1. O objetivo
 
@@ -388,3 +394,34 @@ gerente), então funciona certo tanto na raiz quanto em `/vilarejo/`.
    `rodada_pergunta`). 4. Rodada encerrada não reabre. 5. Resposta repetida → 409.
 6. Nome único por rodada. 7. Regional e Outro jogam mas não entram no pódio.
 8. Upload ≤3MB jpg/png/webp, caminho validado (sem `..`). 9. Tudo por tenant.
+
+## 11. IMPORTANTE — este repo é só a versão DA METTA; falta criar a versão do Pedro (MEI)
+
+> Registrado em 2026-11-11, a pedido do Pedro, pra NÃO esquecer quando esta versão da
+> Metta estiver "pronta".
+
+**Contexto:** o Pedro usa o Claude Code em dois chapéus diferentes:
+- **Pedro-funcionário-da-Metta**: este projeto (`jogo-meta-batida`), construído pra
+  replicar o Jogo da Meta Batida pros clientes **da Metta** (Sipolatti, Vilarejo, etc.).
+  Branding, logos, nomes de cliente aqui são **todos da Metta**.
+- **Pedro-MEI** (pessoa jurídica própria dele, fora da Metta): ele também dá treinamento e
+  cria soluções de IA por conta própria, pros PRÓPRIOS clientes dele (não da Metta). Ele
+  quer usar a MESMA ideia/arquitetura deste motor (quiz de vendas gamificado,
+  multi-cliente, Supabase grátis) pra oferecer pros clientes dele.
+
+**O que falta fazer (ainda NÃO foi feito):** quando esta versão da Metta estiver estável/
+"pronta" (Passo 3b + Passo 4 completos, sem pendência grande em aberto), criar um **segundo
+projeto, em outro repositório do GitHub do Pedro**, que seja uma cópia/fork das mesmas
+ideias e arquitetura (Supabase, Edge Functions, frontend reaproveitável, multi-tenant) mas:
+- **sem nenhuma marca da Metta** — sem `logo-metta.svg`, sem "Metta" em nenhum texto fixo
+  do frontend/admin, sem o nome "Jogo da Meta Batida" (precisa de um nome genérico/próprio
+  do Pedro — ainda não decidido).
+- **sem nomes de cliente da Metta** (Sipolatti, Vilarejo) — tenants de exemplo genéricos,
+  ou vazio até o Pedro cadastrar o cliente dele.
+- Pode (e deve) reaproveitar TODO o código/arquitetura — é a mesma ideia, só sem a marca.
+- Identidade visual, nome do produto, e se vira um projeto Supabase separado (recomendado,
+  pra não misturar billing/dados dos clientes da Metta com os clientes do Pedro) ainda
+  **não foram decididos** — perguntar ao Pedro quando for começar essa parte.
+
+**Não fazer isso ainda**, a não ser que o Pedro peça explicitamente — ele quer terminar a
+versão da Metta primeiro. Isto aqui é só o registro pra não esquecer.
