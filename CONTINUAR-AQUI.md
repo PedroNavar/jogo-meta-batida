@@ -214,10 +214,31 @@ Implementar no mesmo `api/index.ts` (ou função separada) conforme docs/contrat
   de verdade (bcrypt/argon via Deno) e um jeito de cadastrar por tenant.
 
 ### Passo 4 — Multi-cliente de verdade
-- Resolver tenant por subdomínio (`sipolatti.jogo.metta...`) ou `?c=slug`.
-- Marca por tenant (logo_url, cor_primaria) aplicada no frontend.
-- Perguntas `base=true` (Venda 4.0) compartilhadas: ao criar um tenant novo, copiar as base.
+- Resolver tenant por subdomínio (`sipolatti.jogo.metta...`) ou `?c=slug`. — resolvido na
+  prática pela subpasta (`frontend/<slug>/`) + `?c=` na API; subdomínio não foi feito e
+  não parece necessário (GitHub Pages de projeto não faz subdomínio por cliente de graça).
+- Marca por tenant (logo_url, cor_primaria) aplicada no frontend — ✅ FEITO em 2026-11-11
+  (ver "Pedido extra: marca por tenant" abaixo da seção 10). `logo_url` já era usado como
+  `<img>` fixo por cliente (funciona, só não é lido do `/config`); `cor_primaria` agora É
+  lido e aplicado (sobrescreve `--amarelo`).
+- Perguntas `base=true` (Venda 4.0) compartilhadas — ✅ ação `perguntas-copiar-base` feita
+  em 2026-11-11, MAS **leia a nota abaixo antes de achar que isso resolve o problema real**.
 - Painel admin central da Metta vendo todos os tenants (futuro).
+
+**Nota importante sobre como as perguntas de cada cliente são feitas de verdade (Pedro,
+2026-11-11):** a base de conhecimento pro MÉTODO é o arquivo
+`C:\Users\pedro\OneDrive\Documents\00. AI Metta\BRAND - Método\a-venda-4-0.md` (Venda 4.0).
+Pra cada cliente, as perguntas são feitas **cruzando esse método com as informações
+específicas do cliente** (o que ele vende, geralmente tirado do site dele) — normalmente
+dá **20 perguntas por cliente**, parecido com as 20 que a Vilarejo tem hoje (produto-
+específicas: porcelanato, revestimento, etc.), não as 5 genéricas "Venda 4.0" puras que
+ficaram marcadas `base=true` desde o prototype da Sipolatti. Ou seja: **o fluxo real não é
+"copiar um banco fixo de perguntas prontas"** — é gerar um conjunto novo e específico pra
+cada cliente usando o método + o que ele vende como referência. A ação
+`perguntas-copiar-base` que existe no admin ainda pode servir pra um caso raro (um cliente
+sem perguntas próprias ainda, querendo pelo menos as 5 genéricas de método pra começar),
+mas **não é o caminho principal** — o caminho principal é ler o `a-venda-4-0.md` + o site
+do cliente e escrever ~20 perguntas específicas (via admin, cadastro em lote).
 
 ## 10. PEDIDOS DO PEDRO EM 2026-11-11 — ✅ TODOS IMPLEMENTADOS e testados em 2026-11-11
 
