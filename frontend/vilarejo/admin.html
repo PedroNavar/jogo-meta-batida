@@ -1,8 +1,45 @@
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin · Meta Batida Vilarejo</title><link rel="stylesheet" href="../css/jogo.css"><link rel="stylesheet" href="../css/admin.css"><script type="module" src="../js/admin.js"></script></head>
 <body class="pagina-admin"><header class="marca"><img class="logo-cliente" src="../img/logo-vilarejo.png" alt="Vilarejo" width="150" height="42"><span>ADMIN · META BATIDA</span><img class="logo-metta" src="../img/logo-metta.svg" alt="Metta" width="120" height="26"></header>
-<main class="admin"><p class="sobretitulo">PAINEL DO INSTRUTOR</p><h1>Operação do jogo</h1><p id="mensagem" role="status" aria-live="polite"></p>
-<form id="login" class="painel"><h2>Entrar no admin</h2><label for="senha">Senha</label><input id="senha" type="password" autocomplete="current-password" required><button class="principal">Entrar</button></form>
-<div id="aplicacao" hidden><div class="barra"><button id="atualizar" class="discreto">Atualizar dados</button><button id="sair" class="discreto">Sair</button></div><nav id="abas" aria-label="Áreas administrativas"></nav><section id="conteudo" class="painel"></section></div>
-<dialog id="confirmacao" aria-labelledby="confirmar-titulo"><h2 id="confirmar-titulo">Confirmar ação</h2><p id="confirmar-texto"></p><div class="barra"><button id="cancelar" class="discreto">Cancelar</button><button id="confirmar" class="principal">Confirmar</button></div></dialog>
+<main class="admin">
+<p class="sobretitulo">PAINEL DO INSTRUTOR</p><h1>Operação do jogo</h1><p id="mensagem" role="status" aria-live="polite"></p>
+
+<form id="login" class="painel"><h2>Entrar no admin</h2><label for="senha-login">Senha</label><input id="senha-login" type="password" autocomplete="current-password" required><button class="principal">Entrar</button></form>
+
+<div id="aplicacao" hidden>
+<nav id="abas" aria-label="Áreas administrativas">
+ <button type="button" data-aba="rodadas" class="aba-ativa">Rodadas</button>
+ <button type="button" data-aba="perguntas">Perguntas</button>
+</nav>
+
+<section id="aba-rodadas" class="painel">
+ <h2>Criar rodada</h2>
+ <form id="form-rodada">
+  <div class="campo"><label for="r-nome">Nome</label><input id="r-nome" required></div>
+  <div class="campo"><label for="r-segundos">Segundos por pergunta</label><input id="r-segundos" type="number" min="5" max="3600" value="30" required></div>
+  <div class="campo"><label for="r-podio">Pódio</label><select id="r-podio"><option value="geral">Geral</option><option value="loja">Por loja</option></select></div>
+  <div class="campo" id="r-campo-loja" hidden><label for="r-loja">Loja (se a rodada for presa a 1 loja)</label><select id="r-loja"><option value="">Nenhuma (qualquer loja)</option></select></div>
+  <div class="campo"><label for="r-bloco">Bloco de perguntas</label><select id="r-bloco"><option value="">Todas (sem bloco)</option></select></div>
+  <div class="campo"><label for="r-publico">Restringir a (opcional)</label><select id="r-publico"><option value="">Todo mundo</option><option value="vendedores">Só vendedores</option><option value="gerentes">Só gerentes</option><option value="ambos">Vendedores e gerentes</option></select></div>
+  <button class="principal">Criar rodada</button>
+ </form>
+ <h2>Rodadas</h2>
+ <div id="lista-rodadas"></div>
+</section>
+
+<section id="aba-perguntas" class="painel" hidden>
+ <h2>Cadastrar perguntas (em lote)</h2>
+ <div id="lote-perguntas"></div>
+ <div class="barra"><button type="button" id="add-pergunta" class="discreto">+ Nova pergunta</button><button type="button" id="salvar-lote" class="principal">Salvar todas</button></div>
+ <h2>Ativas</h2><div id="lista-ativas"></div>
+ <h2>Ocultas</h2><div id="lista-ocultas"></div>
+ <h2>Excluídas (lixeira)</h2><div id="lista-excluidas"></div>
+</section>
+
+<dialog id="detalhe" aria-labelledby="detalhe-titulo">
+ <h2 id="detalhe-titulo"></h2>
+ <div id="detalhe-conteudo"></div>
+ <button type="button" id="fechar-detalhe" class="discreto">Fechar</button>
+</dialog>
+</div>
 </main></body></html>

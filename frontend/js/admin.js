@@ -1,69 +1,168 @@
+import { api, elemento } from './cliente.js';
+import { API, CLIENTE } from './config.js';
 const $=id=>document.getElementById(id);
-const el=(tag,texto,classe)=>{const e=document.createElement(tag);if(texto!==undefined)e.textContent=texto;if(classe)e.className=classe;return e;};
-let dados,aba='Quem jogou',rodadaId='',ocupado=false;
-const mensagem=s=>{$('mensagem').textContent=s;};
-async function api(rota,body){
- const op={credentials:'same-origin',headers:{}};if(body!==undefined){op.method='POST';op.headers['X-Requested-With']='jogo';if(body instanceof File){op.headers['Content-Type']=body.type||'application/octet-stream';op.body=body;}else{op.headers['Content-Type']='application/json';op.body=JSON.stringify(body);}}
- const r=await fetch(rota,op);const b=await r.json();if(!r.ok){if(r.status===401){$('login').hidden=false;$('aplicacao').hidden=true;}const erro=new Error(b.erro||'Não foi possível concluir');erro.status=r.status;throw erro;}return b;
+let senha='',estado=null;
+const mensagem=m=>{$('mensagem').textContent=m;};
+const chamar=(acao,extra={})=>api('/api/admin',{body:{senha,acao,...extra}});
+const input=(tipo,placeholder)=>{const i=elemento('input');i.type=tipo;i.placeholder=placeholder;return i;};
+function botao(texto,fn,classe='discreto') {
+ const b=elemento('button',texto,classe);b.type='button';
+ b.addEventListener('click',async()=>{try{await fn();}catch(err){mensagem(err.message||'Não foi possível concluir.');}});
+ return b;
 }
-async function acao(fn){if(ocupado)return;ocupado=true;try{await fn();}catch(e){mensagem(e.message);}finally{ocupado=false;}}
-function botao(texto,fn,classe='discreto'){const b=el('button',texto,classe);b.type='button';b.addEventListener('click',()=>acao(fn));return b;}
-function campo(form,nome,titulo,tipo='text',valor=''){const id='campo-'+nome;const label=el('label',titulo);label.htmlFor=id;const input=el(tipo==='textarea'?'textarea':'input');input.id=id;input.name=nome;if(tipo!=='textarea')input.type=tipo;input.value=valor;input.required=true;form.append(label,input);return input;}
-function seletor(form,nome,titulo,opcoes,valor){const label=el('label',titulo),s=el('select');s.id='campo-'+nome;label.htmlFor=s.id;for(const [v,t] of opcoes){const o=el('option',t);o.value=v;s.append(o);}s.value=valor??opcoes[0]?.[0];form.append(label,s);return s;}
-function enviar(form,titulo,fn){const b=el('button',titulo,'principal');b.type='submit';form.append(el('br'),b);form.addEventListener('submit',e=>{e.preventDefault();acao(fn);});}
-function confirmar(texto){return new Promise(resolve=>{const d=$('confirmacao');$('confirmar-texto').textContent=texto;let fim=false;const fechar=v=>{if(fim)return;fim=true;d.close();resolve(v);};$('confirmar').onclick=()=>fechar(true);$('cancelar').onclick=()=>fechar(false);d.oncancel=e=>{e.preventDefault();fechar(false);};d.showModal();$('cancelar').focus();});}
-async function atualizar(){dados=await api('/api/admin/estado');$('login').hidden=true;$('aplicacao').hidden=false;if(!dados.rodadas.some(r=>r.id===rodadaId))rodadaId=dados.rodadas.find(r=>r.status==='aberta')?.id??dados.rodadas.at(-1)?.id??'';await render();}
-function linkCopiar(titulo,url){const p=el('p');p.append(el('strong',titulo+': '),el('span',url+' '),botao('Copiar',async()=>{await navigator.clipboard.writeText(url);mensagem('Link copiado.');}));return p;}
-let postos=[];
-function painelPostos(info,id){const encher=async()=>{const d=await api('/api/admin/a-postos?rodadaId='+encodeURIComponent(id)).catch(()=>null);if(!d?.aPostos)return;info.replaceChildren(el('p',`${d.travada?'Jogo travado':'Jogo liberado'} · ${d.aPostos.length} a postos · ${d.emJogo} jogando · ${d.terminaram} terminaram`),el('p',d.aPostos.map(p=>p.nome).join(', ')||'Ninguém a postos.'));};void encher();if(globalThis.location)postos.push(setInterval(encher,3000));}
-function campoTempo(f,id,valor=''){const t=campo(f,id,'Tempo da pergunta em segundos (vazio usa o tempo da rodada)','number',valor??'');t.required=false;t.min='1';t.max='3600';return t;}
-function formEdicao(q){
- const f=el('form'),pre='ed-'+q.id+'-';f.append(el('h2','Editar pergunta'),el('p','Se mudar só o tempo, a pergunta continua aprovada. Outras mudanças fazem ela voltar para pendente. Rodadas já iniciadas não mudam.'));
- const campos={};for(const [k,t] of [['texto','Pergunta'],['tipo','Tipo'],['tema','Tema']]){campos[k]=campo(f,pre+k,t,k==='texto'?'textarea':'text');campos[k].value=q[k];}
- const opcoes=[0,1,2,3].map(i=>{const e=campo(f,pre+'opcao'+i,'Opção '+String.fromCharCode(65+i));e.value=q.opcoes[i];return e;});
- const correta=seletor(f,pre+'correta','Resposta certa',[[0,'A'],[1,'B'],[2,'C'],[3,'D']]);correta.value=String(q.correta);
- const tempo=campoTempo(f,pre+'tempo',q.segundos);const foto=campo(f,pre+'foto','Nova foto (opcional) · JPG, PNG ou WebP · até 3 MB','file');foto.required=false;foto.accept='image/jpeg,image/png,image/webp';
- enviar(f,'Salvar edição',async()=>{const file=foto.files[0];if(file&&file.size>3*1024*1024)throw new Error('Escolha uma foto de até 3 MB.');const imagem=file?(await api('/api/admin/upload',file)).imagem:undefined;await mudar('editar',{id:q.id,...Object.fromEntries(Object.entries(campos).map(([k,v])=>[k,v.value])),opcoes:opcoes.map(e=>e.value),correta:Number(correta.value),segundos:tempo.value,imagem});});
- return f;
+
+// ---- Rodadas ----------------------------------------------------------
+function desenharRodadas() {
+ $('lista-rodadas').replaceChildren(...estado.rodadas.map(r=>{
+  const card=elemento('article',undefined,'painel');
+  card.append(elemento('h3',r.nome));
+  card.append(elemento('p',`${r.status} · ${r.travada?'travada (aguardando início)':'liberada'} · ${r.segundos}s/pergunta · pódio ${r.podio}${r.bloco?' · bloco "'+r.bloco+'"':''}`));
+  const barra=elemento('div',undefined,'barra');
+  if(r.status==='aberta') {
+   if(r.travada)barra.append(botao('Começar para todos',()=>acaoRodada('rodada-comecar-todos',r.id),'principal'));
+   barra.append(botao('Resetar',async()=>{if(confirm('Resetar '+r.nome+'? Apaga os pontos e trava de novo.'))await acaoRodada('rodada-resetar',r.id);}));
+   barra.append(botao('Encerrar',async()=>{if(confirm('Encerrar '+r.nome+'? Não dá pra reabrir.'))await acaoRodada('rodada-encerrar',r.id);}));
+  }
+  barra.append(botao('Ver ranking',()=>verRanking(r.id)));
+  const csv=elemento('a','Exportar CSV','discreto');
+  csv.href=API+'/admin/csv?c='+encodeURIComponent(CLIENTE)+'&rodadaId='+encodeURIComponent(r.id)+'&senha='+encodeURIComponent(senha);
+  csv.target='_blank';csv.rel='noopener';
+  barra.append(csv);
+  card.append(barra);
+  return card;
+ }));
+ if(!estado.rodadas.length)$('lista-rodadas').replaceChildren(elemento('p','Nenhuma rodada ainda.'));
 }
-async function mudar(rota,b){const r=await api('/api/admin/'+rota,b);mensagem(r.aviso||'Alteração salva.');await atualizar();return r;}
-const quando=ms=>ms?new Date(ms).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'}):'—';
-const registro=r=>`Aberta em ${quando(r.abertaEm)} · Encerrada em ${quando(r.encerradaEm)} · Conduzida por ${r.responsavel??'—'}`;
-const loja=id=>id===null?'Sem loja':dados.lojas.find(l=>l.filial===id)?.rotulo??id;
-function tabela(pai,colunas,linhas){const wrap=el('div',undefined,'tabela-container');wrap.tabIndex=0;wrap.setAttribute('aria-label','Tabela com rolagem');const t=el('table'),head=el('thead'),tr=el('tr');for(const c of colunas)tr.append(el('th',c));head.append(tr);t.append(head);const body=el('tbody');for(const linha of linhas){const r=el('tr');for(const item of linha){const td=el('td');if(item instanceof Node)td.append(item);else td.textContent=String(item??'');r.append(td);}body.append(r);}t.append(body);wrap.append(t);pai.append(wrap);}
-function escolhaRodada(pai){if(!dados.rodadas.length){pai.append(el('p','Crie uma rodada na aba Rodadas.'));return false;}const s=seletor(pai,'rodada','Rodada',dados.rodadas.map(r=>[r.id,r.nome+' · '+r.status]),rodadaId);s.addEventListener('change',()=>acao(async()=>{rodadaId=s.value;await render();}));return true;}
-async function render(){
- for(const t of postos)clearInterval(t);postos=[];
- const nav=$('abas');nav.replaceChildren();for(const nome of ['Quem jogou','Ranking','Perguntas','Rodadas','Lojas']){const b=botao(nome,async()=>{aba=nome;await render();});b.setAttribute('aria-current',String(aba===nome));nav.append(b);}
- const p=$('conteudo');p.replaceChildren(el('h2',aba));
- if(aba==='Quem jogou'){
-  if(!escolhaRodada(p))return;const form=el('form'),texto=campo(form,'lista','Lista esperada: uma pessoa por linha, nome;loja (Regional ou Outro: nome;Regional, nome;Outro)','textarea',(dados.rodadas.find(r=>r.id===rodadaId)?.esperados??[]).map(e=>e.nome+';'+(e.loja??e.cargo??'Regional')).join('\n'));
-  form.append(el('p','Loja aceita número da filial, nome único ou rótulo completo. Importar substitui a lista desta rodada. Linhas inválidas serão avisadas.'));
-  enviar(form,'Importar lista',async()=>{const r=await mudar('lista',{id:rodadaId,texto:texto.value});mensagem(`${r.importados} pessoas importadas.\n${r.avisos.join('\n')}`);});p.append(form);
-  const r=await api('/api/admin/presenca?rodadaId='+encodeURIComponent(rodadaId));p.append(el('p',Object.entries(r.totais).map(([k,v])=>k+': '+v).join(' · ')));
-  tabela(p,['Nome','Cargo','Loja','Situação','Ação'],r.linhas.map(l=>[l.nome,l.cargo??'—',loja(l.loja),l.situacao,l.id?botao('Liberar jogador',async()=>{if(await confirmar(`Liberar ${l.nome}, ${l.loja===null?(l.cargo??'Sem loja'):loja(l.loja)}? Isso apaga a participação e os pontos desta pessoa nesta rodada.`))await mudar('liberar',{rodadaId,id:l.id});}):'']));
- }else if(aba==='Ranking'){
-  if(!escolhaRodada(p))return;const a=el('a','Exportar CSV');a.href='/api/admin/csv?rodadaId='+encodeURIComponent(rodadaId);const exportacao=el('p');exportacao.append(a);p.append(el('p',registro(dados.rodadas.find(x=>x.id===rodadaId))),exportacao);
-  const r=await api('/api/admin/ranking?rodadaId='+encodeURIComponent(rodadaId));tabela(p,['Posição','Nome','Cargo','Loja','Acertos','Erros','Pontos'],r.linhas.map(l=>[l.posicao,l.nome,l.cargo??'—',loja(l.loja),l.acertos,l.erros,l.pontos]));
- }else if(aba==='Perguntas'){
-  p.append(el('p',`${dados.aprovadas} de ${dados.perguntas.filter(q=>q.ativa).length} aprovadas (perguntas ativas)`,'selo'));
-  p.append(botao('Aprovar todas',()=>mudar('aprovar',{todos:true,status:'aprovada'})));
-  const form=el('form');form.append(el('h2','Cadastrar pergunta'));const campos={};for(const [k,t] of [['texto','Pergunta'],['tipo','Tipo'],['tema','Tema']])campos[k]=campo(form,k,t,k==='texto'?'textarea':'text');
-  const opcoes=[0,1,2,3].map(i=>campo(form,'opcao'+i,'Opção '+String.fromCharCode(65+i)));const correta=seletor(form,'correta','Resposta certa',[[0,'A'],[1,'B'],[2,'C'],[3,'D']]);const tempo=campoTempo(form,'tempo');const foto=campo(form,'foto','Foto obrigatória · JPG, PNG ou WebP · até 3 MB','file');foto.accept='image/jpeg,image/png,image/webp';
-  enviar(form,'Cadastrar como pendente',async()=>{const file=foto.files[0];if(!file||file.size>3*1024*1024)throw new Error('Escolha uma foto de até 3 MB.');const up=await api('/api/admin/upload',file);await mudar('perguntas',{...Object.fromEntries(Object.entries(campos).map(([k,v])=>[k,v.value])),opcoes:opcoes.map(e=>e.value),correta:Number(correta.value),segundos:tempo.value,imagem:up.imagem});});p.append(form);
-  for(const q of dados.perguntas){const card=el('article');card.append(el('p',q.ativa?q.status.toUpperCase():'DESATIVADA','selo '+(q.ativa?q.status:'')),el('h2',q.texto));if(q.imagem){const img=el('img');img.src='/'+q.imagem.replace(/^\//,'');img.alt='Foto da pergunta';img.loading='lazy';card.append(img);}card.append(el('p',q.tipo+' · '+q.tema+' · '+(q.segundos?q.segundos+' segundos':'tempo da rodada')));q.opcoes.forEach((o,i)=>card.append(el('p',`${String.fromCharCode(65+i)} · ${o}${i===q.correta?' — RESPOSTA CERTA':''}`)));if(q.ativa){const barra=el('div',undefined,'barra');barra.append(botao(q.status==='aprovada'?'Voltar a pendente':'Aprovar',()=>mudar('aprovar',{id:q.id,status:q.status==='aprovada'?'pendente':'aprovada'})),botao('Editar',()=>{form.hidden=!form.hidden;}),botao('Remover (desativar)',()=>mudar('remover',{id:q.id})));card.append(barra);const form=formEdicao(q);form.hidden=true;card.append(form);}p.append(card);}
- }else if(aba==='Rodadas'){
-  if(dados.aprovadas<20)p.append(el('p',`Atenção: apenas ${dados.aprovadas} perguntas aprovadas. Ao abrir uma rodada agora, haverá menos de 20 perguntas disponíveis.`,'aviso-admin'));
-  p.append(el('p','A lista de perguntas congela quando o primeiro jogador entra. Uma rodada encerrada nunca pode ser reaberta.'));
-  const f=el('form'),nome=campo(f,'nome','Nome da rodada'),seg=campo(f,'segundos','Segundos por pergunta','number','30');seg.min='1';seg.max='3600';const podio=seletor(f,'podio','Pódio', [['geral','Geral'],['loja','Por loja']]);enviar(f,'Criar rodada',()=>mudar('rodadas',{nome:nome.value,segundos:Number(seg.value),podio:podio.value}));p.append(f);
-  for(const r of dados.rodadas){const card=el('article');card.append(el('h2',r.nome),el('p',`${r.status.toUpperCase()} · ${r.segundos} segundos · pódio ${r.podio}${r.iniciada?' · perguntas congeladas':''}`));if(r.status!=='criada')card.append(el('p',registro(r)));if(r.status==='aberta'){const q=r.grupo?'r='+r.id:'';card.append(linkCopiar('Link da equipe',(globalThis.location?.origin ?? '')+'/'+(q?'?'+q:'')),linkCopiar('Link do telão',(globalThis.location?.origin ?? '')+'/telao.html'+(q?'?'+q:'')));}const barra=el('div',undefined,'barra');if(r.status==='criada'){const f=el('form'),quem=campo(f,'responsavel-'+r.id,'Quem vai conduzir');quem.minLength=2;quem.maxLength=60;enviar(f,'Abrir rodada',async()=>{if(dados.aprovadas<20 && !await confirmar(`Abrir ${r.nome} com apenas ${dados.aprovadas} perguntas aprovadas?`))return;await mudar('abrir',{id:r.id,responsavel:quem.value});});card.append(f);}if(r.status==='aberta'){const info=el('div');card.append(info);painelPostos(info,r.id);if(r.travada)barra.append(botao('Começar para todos',()=>mudar('comecar-todos',{id:r.id}),'principal'));barra.append(botao('Resetar jogo',async()=>{if(await confirmar(`Resetar ${r.nome}? Os pontos serão apagados, todos voltam para a espera e o jogo fica travado.`))await mudar('resetar',{id:r.id});}));}if(r.status==='aberta')barra.append(botao('Encerrar rodada',async()=>{if(await confirmar(`Encerrar ${r.nome}? Novas entradas e respostas serão bloqueadas. Esta rodada não poderá ser reaberta.`))await mudar('encerrar',{id:r.id});}));card.append(barra);if(!r.iniciada && r.status!=='encerrada'){const f=el('form'),s=campo(f,'tempo-'+r.id,'Ajustar segundos','number',r.segundos);s.min='1';s.max='3600';enviar(f,'Salvar tempo',()=>mudar('segundos',{id:r.id,segundos:Number(s.value)}));card.append(f);}p.append(card);}
- }else if(aba==='Lojas'){
-  p.append(el('p','Edite rótulo e nome. Filiais usadas na rodada aberta não podem ser removidas. Salve a lista ao terminar.'));
-  const f=el('form'),rows=el('div');f.append(rows);const lojas=dados.lojas.map(l=>({...l}));
-  function desenhar(){rows.replaceChildren();lojas.forEach((l,i)=>{const card=el('article'),filial=campo(card,'filial'+i,'Número da filial','text',l.filial),nome=campo(card,'loja-nome'+i,'Nome','text',l.nome??l.rotulo),rotulo=campo(card,'rotulo'+i,'Rótulo exibido','text',l.rotulo);filial.addEventListener('input',()=>l.filial=filial.value);nome.addEventListener('input',()=>l.nome=nome.value);rotulo.addEventListener('input',()=>l.rotulo=rotulo.value);card.append(botao('Remover filial',async()=>{lojas.splice(i,1);desenhar();}));rows.append(card);});}
-  desenhar();f.append(botao('Adicionar filial',async()=>{lojas.push({filial:'',nome:'',rotulo:''});desenhar();}));enviar(f,'Salvar lojas',()=>mudar('lojas',{lojas}));p.append(f);
+async function acaoRodada(acao,id) {await chamar(acao,{id});await atualizar();}
+
+function desenharBlocos() {
+ const sel=$('r-bloco'),atual=sel.value;
+ sel.replaceChildren(elemento('option','Todas (sem bloco)'));sel.firstChild.value='';
+ for(const b of estado.blocos){const o=elemento('option',b);o.value=b;sel.append(o);}
+ sel.value=atual;
+}
+function desenharLojas() {
+ const sel=$('r-loja'),atual=sel.value;
+ sel.replaceChildren(elemento('option','Nenhuma (qualquer loja)'));sel.firstChild.value='';
+ for(const l of estado.lojas){const o=elemento('option',l.rotulo);o.value=l.filial;sel.append(o);}
+ sel.value=atual;
+}
+$('r-podio').addEventListener('change',()=>{$('r-campo-loja').hidden=$('r-podio').value!=='loja';});
+$('form-rodada').addEventListener('submit',async e=>{
+ e.preventDefault();
+ try {
+  await chamar('rodada-criar',{
+   nome:$('r-nome').value,segundos:Number($('r-segundos').value),podio:$('r-podio').value,
+   loja:$('r-loja').value||null,bloco:$('r-bloco').value||null,publico:$('r-publico').value||null,
+  });
+  $('form-rodada').reset();$('r-segundos').value='30';mensagem('Rodada criada — ela só começa quando você clicar em "Começar para todos".');
+  await atualizar();
+ } catch(err) {mensagem(err.message);}
+});
+
+// ---- Ranking e detalhe por jogador (clicar no nome) --------------------
+function abrirDetalhe(titulo,conteudo) {$('detalhe-titulo').textContent=titulo;$('detalhe-conteudo').replaceChildren(conteudo);if(!$('detalhe').open)$('detalhe').showModal();}
+$('fechar-detalhe').addEventListener('click',()=>$('detalhe').close());
+async function verRanking(rodadaId) {
+ const r=await api('/api/ranking?'+new URLSearchParams({rodadaId}));
+ const div=elemento('div');
+ for(const l of r.linhas) {
+  const b=botao(`${l.posicao}º ${l.nome} — ${l.pontos} pts`,()=>verDetalheJogador(l.id,l.nome));
+  const p=elemento('p');p.append(b);div.append(p);
  }
+ if(!r.linhas.length)div.append(elemento('p','Ninguém jogou ainda.'));
+ abrirDetalhe('Ranking',div);
 }
-$('login').addEventListener('submit',e=>{e.preventDefault();acao(async()=>{try{await api('/api/login',{senha:$('senha').value});}finally{$('senha').value='';}mensagem('');await atualizar();});});
-$('atualizar').addEventListener('click',()=>acao(atualizar));$('sair').addEventListener('click',()=>acao(async()=>{await api('/api/admin/logout',{});$('login').hidden=false;$('aplicacao').hidden=true;dados=null;mensagem('Sessão encerrada.');}));
-acao(async()=>{try{await atualizar();}catch(e){if(e.status!==401)throw e;}});
+async function verDetalheJogador(jogadorId,nome) {
+ const d=await chamar('jogador-detalhe',{jogadorId});
+ const div=elemento('div');
+ div.append(elemento('p',`${d.jogador.pontos} pts · ${d.jogador.acertos} acertos · ${d.jogador.erros} erros`));
+ for(const l of d.respostas) {
+  const p=elemento('p');
+  p.append(elemento('strong',`${l.numero}. ${l.tema?l.tema+' — ':''}`));
+  p.append(elemento('span',l.respondeu
+   ?(l.acertou?`acertou: "${l.opcaoEscolhida}"`:`errou: "${l.opcaoEscolhida}" (certa: "${l.opcaoCorreta}")`)
+   :`não respondeu (certa: "${l.opcaoCorreta}")`));
+  div.append(p);
+ }
+ abrirDetalhe(nome,div);
+}
+
+// ---- Perguntas: cadastro em lote + ativas/ocultas/excluídas ------------
+function novaLinhaPergunta() {
+ const linha=elemento('div',undefined,'painel');
+ const texto=input('text','Pergunta');
+ const tipo=input('text','Tipo (ex.: Venda)');
+ const tema=input('text','Tema (ex.: Aborde)');
+ const opcoes=[0,1,2,3].map(i=>input('text','Opção '+String.fromCharCode(65+i)));
+ const correta=elemento('select');
+ for(let i=0;i<4;i++){const o=elemento('option','Correta: '+String.fromCharCode(65+i));o.value=String(i);correta.append(o);}
+ const segundos=input('number','Segundos (padrão da rodada)');segundos.min='5';segundos.max='3600';
+ const bloco=input('text','Bloco (opcional, ex.: Bloco 1)');
+ const imagem=input('text','URL da imagem (opcional)');
+ const remover=botao('Remover esta pergunta',()=>linha.remove());
+ linha.append(texto,tipo,tema,...opcoes,correta,segundos,bloco,imagem,remover);
+ linha._coletar=()=>({
+  texto:texto.value.trim(),tipo:tipo.value.trim()||null,tema:tema.value.trim()||null,
+  opcoes:opcoes.map(o=>o.value.trim()),correta:Number(correta.value),
+  segundos:segundos.value?Number(segundos.value):null,bloco:bloco.value.trim()||null,imagem:imagem.value.trim()||null,
+ });
+ return linha;
+}
+$('add-pergunta').addEventListener('click',()=>{$('lote-perguntas').append(novaLinhaPergunta());});
+$('salvar-lote').addEventListener('click',async()=>{
+ const linhas=[...$('lote-perguntas').children];
+ if(!linhas.length)return mensagem('Clique em "+ Nova pergunta" pelo menos uma vez.');
+ const perguntas=linhas.map(l=>l._coletar());
+ for(const p of perguntas)if(!p.texto || p.opcoes.some(o=>!o))return mensagem('Preencha o texto e as 4 opções de cada pergunta.');
+ try {
+  const r=await chamar('perguntas-criar',{perguntas});
+  mensagem(r.criadas+' pergunta(s) cadastrada(s).');
+  $('lote-perguntas').replaceChildren();
+  await atualizar();
+ } catch(err) {mensagem(err.message);}
+});
+function linhaPerguntaExistente(p,acoes) {
+ const div=elemento('article',undefined,'painel');
+ div.append(elemento('p',p.texto));
+ if(p.bloco)div.append(elemento('p','Bloco: '+p.bloco));
+ const barra=elemento('div',undefined,'barra');
+ for(const [texto,fn] of acoes)barra.append(botao(texto,fn));
+ div.append(barra);
+ return div;
+}
+async function acaoPergunta(acao,id) {await chamar(acao,{id});await atualizar();}
+function desenharPerguntas() {
+ $('lista-ativas').replaceChildren(...estado.perguntasAtivas.map(p=>linhaPerguntaExistente(p,[
+  ['Ocultar',()=>acaoPergunta('pergunta-ocultar',p.id)],['Excluir',()=>acaoPergunta('pergunta-excluir',p.id)],
+ ])));
+ $('lista-ocultas').replaceChildren(...estado.perguntasOcultas.map(p=>linhaPerguntaExistente(p,[
+  ['Reativar',()=>acaoPergunta('pergunta-reativar',p.id)],['Excluir',()=>acaoPergunta('pergunta-excluir',p.id)],
+ ])));
+ $('lista-excluidas').replaceChildren(...estado.perguntasExcluidas.map(p=>linhaPerguntaExistente(p,[
+  ['Restaurar',()=>acaoPergunta('pergunta-restaurar',p.id)],
+ ])));
+ if(!estado.perguntasAtivas.length)$('lista-ativas').append(elemento('p','Nenhuma.'));
+ if(!estado.perguntasOcultas.length)$('lista-ocultas').append(elemento('p','Nenhuma.'));
+ if(!estado.perguntasExcluidas.length)$('lista-excluidas').append(elemento('p','Nenhuma.'));
+}
+
+// ---- Abas, login e atualização geral ------------------------------------
+for(const btn of $('abas').children) {
+ btn.addEventListener('click',()=>{
+  for(const b of $('abas').children)b.classList.toggle('aba-ativa',b===btn);
+  $('aba-rodadas').hidden=btn.dataset.aba!=='rodadas';
+  $('aba-perguntas').hidden=btn.dataset.aba!=='perguntas';
+ });
+}
+async function atualizar() {
+ estado=await chamar('estado');
+ desenharRodadas();desenharPerguntas();desenharBlocos();desenharLojas();
+}
+$('login').addEventListener('submit',async e=>{
+ e.preventDefault();senha=$('senha-login').value;
+ try {
+  await atualizar();
+  $('login').hidden=true;$('aplicacao').hidden=false;mensagem('');
+ } catch(err) {senha='';mensagem(err.message||'Senha incorreta.');}
+});

@@ -72,9 +72,12 @@ async function rodadaAtiva(tenantId: string, rodadaId: string | null) {
 // ---- Congela a lista de perguntas na entrada do 1º jogador ------------------
 async function congelar(rodada: any) {
   if (rodada.iniciada) return;
-  const { data: perguntas } = await db.from("pergunta").select("*")
+  let q = db.from("pergunta").select("*")
     .eq("tenant_id", rodada.tenant_id).eq("ativa", true).eq("status", "aprovada")
-    .order("criado_em", { ascending: true });
+    .is("excluida_em", null);
+  // rodada.bloco: null = comportamento antigo (todas as perguntas ativas do tenant).
+  if (rodada.bloco) q = q.eq("bloco", rodada.bloco);
+  const { data: perguntas } = await q.order("criado_em", { ascending: true });
   const lista = (perguntas ?? []).slice(0, 20);
   const linhas = lista.map((q: any, i: number) => ({
     rodada_id: rodada.id, ordem: i, pergunta_id: q.id,
@@ -106,6 +109,31 @@ async function verRodada(rodadaId: string) {
 const PUBLICO_POR_OPCAO: Record<string, string[]> = {
   vendedores: ["Vendedor"], gerentes: ["Gerente"], ambos: ["Vendedor", "Gerente"],
 };
+
+// ---- Ações de controle de rodada, compartilhadas por /gerente e /admin -----
+async function comecarTodos(rodadaId: string) {
+  await db.from("rodada").update({ travada: false }).eq("id", rodadaId).eq("status", "aberta");
+  // null: cada jogador carimba o próprio início só quando buscar a pergunta (estadoDe),
+  // já que nem todos vão abrir a tela no mesmo instante.
+  await db.from("jogador").update({
+    situacao: "em-jogo", indice_atual: 0, pergunta_iniciada_em: null,
+  }).eq("rodada_id", rodadaId).eq("situacao", "aguardando");
+  await emitirRanking(rodadaId);
+}
+async function resetarRodada(rodadaId: string) {
+  const { data: jogadores } = await db.from("jogador").select("id").eq("rodada_id", rodadaId);
+  const ids = (jogadores ?? []).map((j: any) => j.id);
+  if (ids.length) await db.from("resposta").delete().in("jogador_id", ids);
+  await db.from("jogador").update({
+    pontos: 0, acertos: 0, erros: 0, situacao: "aguardando", indice_atual: 0, pergunta_iniciada_em: null,
+  }).eq("rodada_id", rodadaId);
+  await db.from("rodada").update({ travada: true }).eq("id", rodadaId);
+  await emitirRanking(rodadaId);
+}
+async function encerrarRodada(rodadaId: string) {
+  await db.from("rodada").update({ status: "encerrada", encerrada_em: new Date().toISOString() }).eq("id", rodadaId);
+  await emitirRanking(rodadaId);
+}
 
 // ---- Posição do jogador (entre os elegíveis ao pódio) ----------------------
 async function posicoes(rodadaId: string) {
@@ -340,37 +368,173 @@ Deno.serve(async (req) => {
       const id = rodada.id;
 
       if (body.acao === "ver") return json(await verRodada(id));
-
-      if (body.acao === "comecar") {
-        await db.from("rodada").update({ travada: false }).eq("id", id).eq("status", "aberta");
-        // null: cada jogador carimba o próprio início só quando buscar a pergunta (estadoDe),
-        // já que nem todos vão abrir a tela no mesmo instante.
-        await db.from("jogador").update({
-          situacao: "em-jogo", indice_atual: 0, pergunta_iniciada_em: null,
-        }).eq("rodada_id", id).eq("situacao", "aguardando");
-        await emitirRanking(id);
-        return json(await verRodada(id));
-      }
-
-      if (body.acao === "resetar") {
-        const { data: jogadores } = await db.from("jogador").select("id").eq("rodada_id", id);
-        const ids = (jogadores ?? []).map((j) => j.id);
-        if (ids.length) await db.from("resposta").delete().in("jogador_id", ids);
-        await db.from("jogador").update({
-          pontos: 0, acertos: 0, erros: 0, situacao: "aguardando", indice_atual: 0, pergunta_iniciada_em: null,
-        }).eq("rodada_id", id);
-        await db.from("rodada").update({ travada: true }).eq("id", id);
-        await emitirRanking(id);
-        return json(await verRodada(id));
-      }
-
-      if (body.acao === "encerrar") {
-        await db.from("rodada").update({ status: "encerrada", encerrada_em: new Date().toISOString() }).eq("id", id);
-        await emitirRanking(id);
-        return json(await verRodada(id));
-      }
+      if (body.acao === "comecar") { await comecarTodos(id); return json(await verRodada(id)); }
+      if (body.acao === "resetar") { await resetarRodada(id); return json(await verRodada(id)); }
+      if (body.acao === "encerrar") { await encerrarRodada(id); return json(await verRodada(id)); }
 
       return erro("Ação inválida: " + body.acao);
+    }
+
+    // ---------------- POST /admin ----------------
+    if (rota === "/admin" && req.method === "POST") {
+      const tenant = await tenantPorSlug(url.searchParams.get("c"));
+      if (!tenant) return erro("Cliente não encontrado.", 404);
+      const { data: senhaOk } = await db.rpc("verificar_senha_admin", {
+        p_tenant_id: tenant.id, p_senha: String(body.senha ?? ""),
+      });
+      if (!senhaOk) return erro("Senha incorreta.", 401);
+      const acao = body.acao;
+
+      // ---- estado geral: rodadas, perguntas (ativas/ocultas/excluídas), blocos, lojas ----
+      if (acao === "estado") {
+        const { data: rodadas } = await db.from("rodada").select("*")
+          .eq("tenant_id", tenant.id).order("criado_em", { ascending: false });
+        const { data: perguntas } = await db.from("pergunta").select("*")
+          .eq("tenant_id", tenant.id).order("criado_em", { ascending: false });
+        const { data: lojas } = await db.from("loja").select("filial,rotulo").eq("tenant_id", tenant.id);
+        const ps = perguntas ?? [];
+        const blocos = [...new Set(ps.filter((p: any) => !p.excluida_em && p.bloco).map((p: any) => p.bloco))];
+        return json({
+          rodadas: (rodadas ?? []).map((r: any) => ({
+            id: r.id, nome: r.nome, status: r.status, travada: r.travada, segundos: r.segundos,
+            podio: r.podio, bloco: r.bloco, grupo: r.grupo, iniciada: r.iniciada,
+          })),
+          perguntasAtivas: ps.filter((p: any) => !p.excluida_em && p.ativa)
+            .map((p: any) => ({ id: p.id, texto: p.texto, tipo: p.tipo, tema: p.tema, opcoes: p.opcoes, correta: p.correta, segundos: p.segundos, imagem: p.imagem, bloco: p.bloco })),
+          perguntasOcultas: ps.filter((p: any) => !p.excluida_em && !p.ativa)
+            .map((p: any) => ({ id: p.id, texto: p.texto, tipo: p.tipo, tema: p.tema, opcoes: p.opcoes, correta: p.correta, segundos: p.segundos, imagem: p.imagem, bloco: p.bloco })),
+          perguntasExcluidas: ps.filter((p: any) => p.excluida_em)
+            .map((p: any) => ({ id: p.id, texto: p.texto, bloco: p.bloco, excluidaEm: p.excluida_em })),
+          blocos, lojas: lojas ?? [],
+        });
+      }
+
+      // ---- perguntas: criar em lote, editar, ocultar/reativar, excluir/restaurar ----
+      if (acao === "perguntas-criar") {
+        const lista = Array.isArray(body.perguntas) ? body.perguntas : [];
+        if (!lista.length) return erro("Mande ao menos 1 pergunta.");
+        const linhas = [];
+        for (const p of lista) {
+          const opcoes = Array.isArray(p.opcoes) ? p.opcoes.map(String) : [];
+          if (!p.texto || opcoes.length !== 4) return erro("Cada pergunta precisa de texto e 4 opções.");
+          const correta = Number(p.correta);
+          if (!(correta >= 0 && correta <= 3)) return erro("Opção correta precisa ser 0-3.");
+          linhas.push({
+            tenant_id: tenant.id, texto: String(p.texto), tipo: p.tipo ?? null, tema: p.tema ?? null,
+            opcoes, correta, segundos: p.segundos ?? null, imagem: p.imagem ?? null, bloco: p.bloco ?? null,
+            status: "aprovada", ativa: true, base: false,
+          });
+        }
+        const { error } = await db.from("pergunta").insert(linhas);
+        if (error) return erro("Não foi possível cadastrar: " + error.message, 500);
+        return json({ criadas: linhas.length });
+      }
+      if (acao === "pergunta-editar") {
+        const campos = ["texto", "tipo", "tema", "opcoes", "correta", "segundos", "imagem", "bloco"];
+        const dados: any = {};
+        for (const c of campos) if (body[c] !== undefined) dados[c] = body[c];
+        const { error } = await db.from("pergunta").update(dados).eq("id", body.id).eq("tenant_id", tenant.id);
+        if (error) return erro("Não foi possível editar.", 500);
+        return json({ ok: true });
+      }
+      if (acao === "pergunta-ocultar" || acao === "pergunta-reativar") {
+        await db.from("pergunta").update({ ativa: acao === "pergunta-reativar" }).eq("id", body.id).eq("tenant_id", tenant.id);
+        return json({ ok: true });
+      }
+      if (acao === "pergunta-excluir" || acao === "pergunta-restaurar") {
+        await db.from("pergunta").update({ excluida_em: acao === "pergunta-excluir" ? new Date().toISOString() : null })
+          .eq("id", body.id).eq("tenant_id", tenant.id);
+        return json({ ok: true });
+      }
+
+      // ---- rodadas: criar (principal, travada por padrão) e controlar ----
+      if (acao === "rodada-criar") {
+        const nome = String(body.nome ?? "").trim() || "Rodada";
+        const segundos = Number(body.segundos) || 30;
+        const loja = body.loja || null;
+        const podio = body.podio === "loja" ? "loja" : "geral";
+        const publico = body.publico ? (PUBLICO_POR_OPCAO[body.publico] ?? null) : null;
+        const { data: nova, error } = await db.from("rodada").insert({
+          tenant_id: tenant.id, nome, status: "aberta", segundos, podio,
+          travada: true, grupo: false, loja, publico, bloco: body.bloco || null,
+          criada_por: "admin", aberta_em: new Date().toISOString(),
+        }).select("id").single();
+        if (error || !nova) return erro("Não foi possível criar a rodada.", 500);
+        return json(await verRodada(nova.id));
+      }
+      // demais ações de rodada: qualquer rodada do tenant (admin controla a principal também)
+      if (["rodada-comecar-todos", "rodada-resetar", "rodada-encerrar", "rodada-ver"].includes(acao)) {
+        const { data: rodada } = await db.from("rodada").select("id")
+          .eq("id", body.id).eq("tenant_id", tenant.id).maybeSingle();
+        if (!rodada) return erro("Rodada não encontrada.", 404);
+        if (acao === "rodada-comecar-todos") await comecarTodos(rodada.id);
+        if (acao === "rodada-resetar") await resetarRodada(rodada.id);
+        if (acao === "rodada-encerrar") await encerrarRodada(rodada.id);
+        return json(await verRodada(rodada.id));
+      }
+
+      // ---- detalhe das respostas de 1 jogador (inclui gabarito — só aqui) ----
+      if (acao === "jogador-detalhe") {
+        const { data: jogador } = await db.from("jogador").select("*").eq("id", body.jogadorId).maybeSingle();
+        if (!jogador) return erro("Jogador não encontrado.", 404);
+        const { data: rodadaDoJogador } = await db.from("rodada").select("tenant_id").eq("id", jogador.rodada_id).maybeSingle();
+        if (!rodadaDoJogador || rodadaDoJogador.tenant_id !== tenant.id) return erro("Jogador não encontrado.", 404);
+        const perguntas = await perguntasDaRodada(jogador.rodada_id);
+        const { data: respostas } = await db.from("resposta").select("*").eq("jogador_id", jogador.id).order("ordem");
+        const porOrdem = new Map((respostas ?? []).map((r: any) => [r.ordem, r]));
+        const linhas = perguntas.map((q: any, i: number) => {
+          const r: any = porOrdem.get(i);
+          return {
+            numero: i + 1, tema: q.tema, texto: q.texto,
+            opcaoEscolhida: r ? q.opcoes[r.opcao] : null, opcaoCorreta: q.opcoes[q.correta],
+            acertou: r ? r.acertou : null, pontos: r ? r.pontos : 0, respondeu: !!r,
+          };
+        });
+        return json({
+          jogador: { nome: jogador.nome, cargo: jogador.cargo, loja: jogador.loja, pontos: jogador.pontos, acertos: jogador.acertos, erros: jogador.erros },
+          respostas: linhas,
+        });
+      }
+
+      return erro("Ação inválida: " + acao);
+    }
+
+    // ---------------- GET /admin/csv (download, por isso é GET + query string) --------
+    if (rota === "/admin/csv" && req.method === "GET") {
+      const tenant = await tenantPorSlug(url.searchParams.get("c"));
+      if (!tenant) return erro("Cliente não encontrado.", 404);
+      const { data: senhaOk } = await db.rpc("verificar_senha_admin", {
+        p_tenant_id: tenant.id, p_senha: url.searchParams.get("senha") ?? "",
+      });
+      if (!senhaOk) return erro("Senha incorreta.", 401);
+      const rodadaId = url.searchParams.get("rodadaId");
+      const { data: rodada } = await db.from("rodada").select("id").eq("id", rodadaId).eq("tenant_id", tenant.id).maybeSingle();
+      if (!rodada) return erro("Rodada não encontrada.", 404);
+      const perguntas = await perguntasDaRodada(rodada.id);
+      const { data: jogadores } = await db.from("jogador").select("*").eq("rodada_id", rodada.id).order("pontos", { ascending: false });
+      const { data: todasRespostas } = await db.from("resposta").select("*")
+        .in("jogador_id", (jogadores ?? []).map((j: any) => j.id));
+      const respPorJogador = new Map<string, Map<number, any>>();
+      for (const r of todasRespostas ?? []) {
+        if (!respPorJogador.has(r.jogador_id)) respPorJogador.set(r.jogador_id, new Map());
+        respPorJogador.get(r.jogador_id)!.set(r.ordem, r);
+      }
+      const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+      const cabecalho = ["nome", "cargo", "loja", "pontos", "acertos", "erros",
+        ...perguntas.flatMap((_: any, i: number) => [`P${i + 1} resposta`, `P${i + 1} certo`])];
+      const linhas = (jogadores ?? []).map((j: any) => {
+        const respostasDoJogador = respPorJogador.get(j.id) ?? new Map();
+        const colunas = perguntas.flatMap((q: any, i: number) => {
+          const r = respostasDoJogador.get(i);
+          return [r ? q.opcoes[r.opcao] : "", r ? (r.acertou ? "sim" : "não") : "não respondeu"];
+        });
+        return [j.nome, j.cargo, j.loja ?? "", j.pontos, j.acertos, j.erros, ...colunas];
+      });
+      const csv = [cabecalho, ...linhas].map((l) => l.map(esc).join(",")).join("\r\n");
+      return new Response("﻿" + csv, {
+        headers: { ...CORS, "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="rodada-${rodada.id}.csv"` },
+      });
     }
 
     // ---------------- GET /ranking ----------------

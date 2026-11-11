@@ -5,11 +5,12 @@ export const pausa=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 // copiar/compartilhar que funcionem tanto na raiz quanto numa subpasta de cliente (ex.: /vilarejo/).
 export const baseUrl=()=>new URL('.',location.href).href;
 const sb=createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false}});
-// /config, /entrar e /gerente resolvem o tenant por ?c=; as demais rotas já identificam a rodada pelo token/id.
-function urlDaRota(rota) {
+// /config, /entrar, /gerente e /admin(/csv) resolvem o tenant por ?c=; as demais rotas já
+// identificam a rodada pelo token/id.
+export function urlDaRota(rota) {
  const [caminho,busca='']=rota.replace(/^\/api/,'').split('?');
  const params=new URLSearchParams(busca);
- if((caminho==='/config' || caminho==='/entrar' || caminho==='/gerente') && !params.has('c'))params.set('c',CLIENTE);
+ if(['/config','/entrar','/gerente','/admin','/admin/csv'].includes(caminho) && !params.has('c'))params.set('c',CLIENTE);
  const qs=params.toString();
  return API+caminho+(qs?'?'+qs:'');
 }
