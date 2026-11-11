@@ -529,6 +529,18 @@ Deno.serve(async (req) => {
         });
       }
 
+      // ---- libera um jogador: apaga a participação (e respostas, em cascata) pra ele
+      // poder entrar de novo com o mesmo nome (contorna "Esse nome já jogou") ---------
+      if (acao === "jogador-liberar") {
+        const { data: jogador } = await db.from("jogador").select("id,rodada_id").eq("id", body.jogadorId).maybeSingle();
+        if (!jogador) return erro("Jogador não encontrado.", 404);
+        const { data: rodadaDoJogador } = await db.from("rodada").select("tenant_id").eq("id", jogador.rodada_id).maybeSingle();
+        if (!rodadaDoJogador || rodadaDoJogador.tenant_id !== tenant.id) return erro("Jogador não encontrado.", 404);
+        await db.from("jogador").delete().eq("id", jogador.id);
+        await emitirRanking(jogador.rodada_id);
+        return json({ ok: true });
+      }
+
       return erro("Ação inválida: " + acao);
     }
 

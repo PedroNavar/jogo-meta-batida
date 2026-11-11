@@ -83,10 +83,17 @@ async function verRanking(rodadaId) {
  const div=elemento('div');
  for(const l of r.linhas) {
   const b=botao(`${l.posicao}º ${l.nome} — ${l.pontos} pts`,()=>verDetalheJogador(l.id,l.nome));
-  const p=elemento('p');p.append(b);div.append(p);
+  const liberar=botao('Liberar',()=>liberarJogador(l.id,l.nome,rodadaId));
+  const p=elemento('p');p.append(b,' ',liberar);div.append(p);
  }
  if(!r.linhas.length)div.append(elemento('p','Ninguém jogou ainda.'));
  abrirDetalhe('Ranking',div);
+}
+async function liberarJogador(jogadorId,nome,rodadaId) {
+ if(!confirm(`Liberar "${nome}"? Apaga a participação dele (pontos e respostas) — ele poderá entrar de novo com o mesmo nome.`))return;
+ await chamar('jogador-liberar',{jogadorId});
+ mensagem(nome+' liberado(a).');
+ await verRanking(rodadaId);
 }
 async function verDetalheJogador(jogadorId,nome) {
  const d=await chamar('jogador-detalhe',{jogadorId});
