@@ -1,4 +1,4 @@
-import { api, elemento, baseUrl } from './cliente.js';
+import { api, elemento, baseUrl, aplicarMarca } from './cliente.js';
 const $=id=>document.getElementById(id);
 let config=null,senha='',rodada=null,espera=null,ocupado=false;
 const status=m=>{$('status').textContent=m;};
@@ -47,7 +47,7 @@ $('encerrar').addEventListener('click',async()=>{
 });
 async function iniciar() {
  try {
-  config=await api('/api/config');
+  config=await api('/api/config');aplicarMarca(config);
   for(const l of config.lojas){const op=elemento('option',l.rotulo);op.value=l.filial;$('loja').append(op);}
  } catch {status('Não foi possível carregar. Atualize a página.');}
 }

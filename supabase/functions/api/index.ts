@@ -253,6 +253,7 @@ Deno.serve(async (req) => {
         } : null,
         lojas: lojas ?? [],
         nomes,
+        tenant: { nome: tenant.nome, cor: tenant.cor_primaria, logo: tenant.logo_url },
       });
     }
 

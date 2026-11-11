@@ -1,4 +1,4 @@
-import { api, lerToken, guardarToken, relogio, enviarResposta, imagemLocal, elemento, desenharPodio, listasPorCargo, conectarRanking } from './cliente.js';
+import { api, lerToken, guardarToken, relogio, enviarResposta, imagemLocal, elemento, desenharPodio, listasPorCargo, conectarRanking, aplicarMarca } from './cliente.js';
 const $=id=>document.getElementById(id);
 const telas=['entrada','instrucoes','jogo','feedback','final'];
 const rodadaLink=new URLSearchParams(globalThis.location?.search ?? '').get('r');
@@ -25,7 +25,7 @@ function conectar() {assinarRanking(estado?estado.rodada.id:rodadaLink);}
 async function configurar() {
  if(configurando)return;configurando=true;
  try {
-  const c=await api('/api/config'+(rodadaLink?'?r='+encodeURIComponent(rodadaLink):''));config=c;lojas=new Map(c.lojas.map(l=>[l.filial,l.rotulo]));
+  const c=await api('/api/config'+(rodadaLink?'?r='+encodeURIComponent(rodadaLink):''));config=c;lojas=new Map(c.lojas.map(l=>[l.filial,l.rotulo]));aplicarMarca(c);
   if(estado) {$('nova-rodada').hidden=!(c.rodada && c.rodada.id!==estado.rodada.id);return;}
   $('rodada').textContent=c.mensagem || c.rodada.nome;
   if(rodadaLink) {

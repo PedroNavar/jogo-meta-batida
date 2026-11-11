@@ -4,6 +4,11 @@ export const pausa=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 // URL absoluta da PASTA da página atual (sem o nome do arquivo). Serve pra montar links pra
 // copiar/compartilhar que funcionem tanto na raiz quanto numa subpasta de cliente (ex.: /vilarejo/).
 export const baseUrl=()=>new URL('.',location.href).href;
+// Marca por tenant: cor_primaria substitui o amarelo padrão nas páginas do jogo (jogo/telão/
+// gerente) sem precisar de CSS por cliente. Chame de novo a cada /config recebido — idempotente.
+export function aplicarMarca(config) {
+ if(config?.tenant?.cor)document.documentElement.style.setProperty('--amarelo',config.tenant.cor);
+}
 const sb=createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false}});
 // /config, /entrar, /gerente e /admin(/csv) resolvem o tenant por ?c=; as demais rotas já
 // identificam a rodada pelo token/id.

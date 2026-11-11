@@ -1,4 +1,4 @@
-import { api, desenharPodio, listasPorCargo, conectarRanking } from './cliente.js';
+import { api, desenharPodio, listasPorCargo, conectarRanking, aplicarMarca } from './cliente.js';
 const $=id=>document.getElementById(id);
 const rodadaLink=new URLSearchParams(globalThis.location?.search ?? '').get('r');
 let lojas=new Map(),dados=null,config=null,ocupado=false,listaEm=0;
@@ -15,7 +15,7 @@ const assinarRanking=conectarRanking({
 });
 async function configurar(){
  if(ocupado)return;ocupado=true;
- try {config=await api('/api/config'+(rodadaLink?'?r='+encodeURIComponent(rodadaLink):''));lojas=new Map(config.lojas.map(l=>[l.filial,l.rotulo]));assinarRanking(rodadaLink || config.rodada?.id || null);renderizar();}
+ try {config=await api('/api/config'+(rodadaLink?'?r='+encodeURIComponent(rodadaLink):''));lojas=new Map(config.lojas.map(l=>[l.filial,l.rotulo]));aplicarMarca(config);assinarRanking(rodadaLink || config.rodada?.id || null);renderizar();}
  catch {$('status').textContent='Reconectando…';}
  finally {ocupado=false;}
 }
