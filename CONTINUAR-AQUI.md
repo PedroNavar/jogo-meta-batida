@@ -217,7 +217,36 @@ Implementar no mesmo `api/index.ts` (ou função separada) conforme docs/contrat
 
 > Registrados antes de implementar (sessão perto do limite semanal), e implementados na
 > sessão seguinte, no mesmo dia. Todos testados via curl E no browser (local, porta 5180).
-> Deployado: função redeployada, 4 migrations aplicadas, frontend publicado no GitHub Pages.
+> Deployado: função redeployada, migrations aplicadas, frontend publicado no GitHub Pages.
+
+### Pedidos extras, na mesma sessão: editar pergunta, embaralhar por jogador — ✅ FEITO
+Depois de testar o painel, o Pedro pediu mais 3 ajustes:
+1. **Editar pergunta (com imagem)**: cada pergunta ativa/oculta no admin agora tem um
+   botão "Editar" que abre um formulário pré-preenchido (texto, tipo, tema, 4 opções,
+   correta, segundos, bloco, imagem) e salva via `pergunta-editar` (já existia no
+   backend, só faltava o botão no frontend). Testado: editei texto e adicionei uma URL
+   de imagem numa pergunta existente, confirmei via curl que persistiu.
+2. **Campo "Bloco" com sugestão**: os campos de bloco (cadastro em lote e edição) agora
+   têm um `<datalist>` com os blocos já cadastrados, pra reaproveitar o nome certo.
+   (O relato de "bloco criado não aparece no seletor" era porque nenhuma pergunta tinha
+   bloco preenchido ainda — testei criar uma com bloco e ela apareceu certinho no
+   seletor de criar rodada; não era bug.)
+3. **Perguntas em ordem aleatória, DIFERENTE pra cada jogador** (não uma ordem única
+   compartilhada por todo mundo na rodada): nova coluna `jogador.ordem_perguntas int[]`
+   (migration `20261111100921`) — uma permutação dos índices das perguntas congeladas,
+   sorteada (Fisher-Yates) quando o jogador começa (`/comecar` individual, e
+   `comecarTodos()` usado por `/gerente` e `/admin`, gera uma ordem própria POR
+   jogador, não uma só pra todos). `estadoDe()`, `/responder`, `jogador-detalhe` e o
+   CSV do admin todos passaram a indexar a pergunta atual por
+   `ordem_perguntas[indice_atual]` em vez de `indice_atual` direto. Resetar a rodada
+   limpa `ordem_perguntas` (sorteia de novo na próxima vez que o jogador começar).
+   Testado: 3 jogadores começando a mesma rodada da Vilarejo (20 perguntas) receberam
+   3 primeiras perguntas diferentes; `jogador-detalhe` de um deles bateu certinho com a
+   pergunta que ele realmente recebeu primeiro. **Efeito colateral do CSV**: a coluna
+   "P1" agora significa "a 1ª pergunta que ESSE jogador pegou", não uma pergunta fixa
+   igual pra todo mundo — não dá mais pra comparar coluna a coluna entre jogadores
+   diferentes achando que é a mesma pergunta (mas `texto`/`tema` no detalhe por jogador
+   deixam claro qual pergunta era).
 
 ### #1 — Tela de "você acertou / errou + pontos" — ✅ FEITO
 `frontend/js/jogador.js`, `responder()`: agora usa a resposta direta de `/api/responder`
@@ -279,6 +308,14 @@ ação "Reativar") e Excluídas (`excluida_em not null`, ação "Restaurar" — 
 `excluida_em`, não mexe no `ativa`**: uma pergunta oculta que foi excluída volta oculta, não
 ativa). Testado via curl: ocultar → excluir → aparece em "excluídas" → restaurar → volta
 pra "ocultas" (não pra "ativas") — confirmado.
+
+### Outros ajustes da mesma sessão
+- **Logo da Vilarejo trocada** pela versão branca (a escura sumia no fundo preto do jogo) —
+  `frontend/img/logo-vilarejo-branca.png`, referenciada nas 4 páginas de `frontend/vilarejo/`
+  e no `tenant.logo_url` (migration `20261111095033`).
+- **Senhas reais da Sipolatti definidas** (admin e gerente — dadas pelo Pedro em chat),
+  substituindo as de teste. Vilarejo continua com as senhas de teste já registradas na
+  seção "Passo 3a" acima, até o Pedro passar as reais dela também.
 
 ### Limitações conhecidas desta implementação (decisões deliberadas, não bugs)
 - **Sem sessão de admin de verdade**: cada chamada de `/admin` manda a senha no corpo (o
