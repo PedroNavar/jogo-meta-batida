@@ -309,6 +309,13 @@ ação "Reativar") e Excluídas (`excluida_em not null`, ação "Restaurar" — 
 ativa). Testado via curl: ocultar → excluir → aparece em "excluídas" → restaurar → volta
 pra "ocultas" (não pra "ativas") — confirmado.
 
+### Bug real encontrado pelo Pedro: admin não mostrava o link da rodada — ✅ CORRIGIDO
+Rodada criada pelo admin não tinha como ser compartilhada: só `/gerente.html` mostrava os
+campos "Link do jogo"/"Link do telão" depois de criar; o admin não mostrava nada parecido
+em nenhuma rodada. Corrigido: cada card de rodada em `frontend/js/admin.js` agora tem os
+dois links (jogo e telão), com campo pra copiar — usando `baseUrl()` (mesmo helper do
+gerente), então funciona certo tanto na raiz quanto em `/vilarejo/`.
+
 ### Outros ajustes da mesma sessão
 - **Logo da Vilarejo trocada** pela versão branca (a escura sumia no fundo preto do jogo) —
   `frontend/img/logo-vilarejo-branca.png`, referenciada nas 4 páginas de `frontend/vilarejo/`
