@@ -1,4 +1,4 @@
-import { api, elemento } from './cliente.js';
+import { api, elemento, baseUrl } from './cliente.js';
 import { API, CLIENTE } from './config.js';
 const $=id=>document.getElementById(id);
 let senha='',estado=null;
@@ -10,6 +10,16 @@ function botao(texto,fn,classe='discreto') {
  b.addEventListener('click',async()=>{try{await fn();}catch(err){mensagem(err.message||'Não foi possível concluir.');}});
  return b;
 }
+function linkCopiavel(rotulo,url) {
+ const p=elemento('p');
+ const campo=elemento('input');campo.readOnly=true;campo.value=url;
+ const copiar=botao('Copiar',async()=>{
+  try {await navigator.clipboard.writeText(url);mensagem(rotulo+' copiado.');}
+  catch {campo.select();mensagem('Selecione e copie o link.');}
+ });
+ p.append(rotulo+': ',campo,copiar);
+ return p;
+}
 
 // ---- Rodadas ----------------------------------------------------------
 function desenharRodadas() {
@@ -17,6 +27,8 @@ function desenharRodadas() {
   const card=elemento('article',undefined,'painel');
   card.append(elemento('h3',r.nome));
   card.append(elemento('p',`${r.status} · ${r.travada?'travada (aguardando início)':'liberada'} · ${r.segundos}s/pergunta · pódio ${r.podio}${r.bloco?' · bloco "'+r.bloco+'"':''}`));
+  card.append(linkCopiavel('Link do jogo',baseUrl()+'?r='+r.id));
+  card.append(linkCopiavel('Link do telão',baseUrl()+'telao.html?r='+r.id));
   const barra=elemento('div',undefined,'barra');
   if(r.status==='aberta') {
    if(r.travada)barra.append(botao('Começar para todos',()=>acaoRodada('rodada-comecar-todos',r.id),'principal'));
