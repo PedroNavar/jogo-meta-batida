@@ -309,6 +309,16 @@ ação "Reativar") e Excluídas (`excluida_em not null`, ação "Restaurar" — 
 ativa). Testado via curl: ocultar → excluir → aparece em "excluídas" → restaurar → volta
 pra "ocultas" (não pra "ativas") — confirmado.
 
+### ⚠️ PENDÊNCIA IMEDIATA (sessão interrompida aqui, créditos acabando)
+O fix abaixo (links de jogo/telão no admin) já foi commitado e pushado (commit
+`4a31014`/`8a3b799`), mas o deploy do GitHub Pages ficou **"queued" por vários minutos**
+sem terminar (run `43097253120`) — incomum, pode ser fila do GitHub Actions ou travou.
+**Primeira coisa a fazer na próxima sessão:** checar
+`gh run list --workflow="Publicar frontend no GitHub Pages" --limit 3` e, se ainda não
+tiver rodado, disparar de novo com `gh workflow run "Publicar frontend no GitHub Pages"`.
+Confirmar com `curl -s https://pedronavar.github.io/jogo-meta-batida/js/admin.js | grep -c linkCopiavel`
+(deve dar `1`+ se o deploy novo já foi).
+
 ### Bug real encontrado pelo Pedro: admin não mostrava o link da rodada — ✅ CORRIGIDO
 Rodada criada pelo admin não tinha como ser compartilhada: só `/gerente.html` mostrava os
 campos "Link do jogo"/"Link do telão" depois de criar; o admin não mostrava nada parecido
