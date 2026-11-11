@@ -69,6 +69,16 @@ async function rodadaAtiva(tenantId: string, rodadaId: string | null) {
   return data;
 }
 
+// Fisher-Yates — embaralha sem viés, sem mutar o array original.
+function embaralhar<T>(lista: T[]): T[] {
+  const arr = [...lista];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 // ---- Congela a lista de perguntas na entrada do 1º jogador ------------------
 async function congelar(rodada: any) {
   if (rodada.iniciada) return;
@@ -78,6 +88,8 @@ async function congelar(rodada: any) {
   // rodada.bloco: null = comportamento antigo (todas as perguntas ativas do tenant).
   if (rodada.bloco) q = q.eq("bloco", rodada.bloco);
   const { data: perguntas } = await q.order("criado_em", { ascending: true });
+  // Ordem natural aqui; o embaralhamento é por JOGADOR (jogador.ordem_perguntas), gerado
+  // ao começar — cada um joga as mesmas perguntas, mas numa ordem própria e aleatória.
   const lista = (perguntas ?? []).slice(0, 20);
   const linhas = lista.map((q: any, i: number) => ({
     rodada_id: rodada.id, ordem: i, pergunta_id: q.id,
@@ -110,14 +122,23 @@ const PUBLICO_POR_OPCAO: Record<string, string[]> = {
   vendedores: ["Vendedor"], gerentes: ["Gerente"], ambos: ["Vendedor", "Gerente"],
 };
 
+const ordemAleatoria = (total: number) => embaralhar(Array.from({ length: total }, (_, i) => i));
+
 // ---- Ações de controle de rodada, compartilhadas por /gerente e /admin -----
 async function comecarTodos(rodadaId: string) {
   await db.from("rodada").update({ travada: false }).eq("id", rodadaId).eq("status", "aberta");
-  // null: cada jogador carimba o próprio início só quando buscar a pergunta (estadoDe),
-  // já que nem todos vão abrir a tela no mesmo instante.
-  await db.from("jogador").update({
-    situacao: "em-jogo", indice_atual: 0, pergunta_iniciada_em: null,
-  }).eq("rodada_id", rodadaId).eq("situacao", "aguardando");
+  const total = (await perguntasDaRodada(rodadaId)).length;
+  const { data: aguardando } = await db.from("jogador").select("id")
+    .eq("rodada_id", rodadaId).eq("situacao", "aguardando");
+  // Cada jogador recebe a PRÓPRIA ordem embaralhada das perguntas (pedido: cada um que
+  // começa embaralha diferente). pergunta_iniciada_em fica null: só carimba quando
+  // ele buscar a pergunta (estadoDe), já que nem todos abrem a tela no mesmo instante.
+  for (const j of aguardando ?? []) {
+    await db.from("jogador").update({
+      situacao: "em-jogo", indice_atual: 0, pergunta_iniciada_em: null,
+      ordem_perguntas: ordemAleatoria(total),
+    }).eq("id", j.id);
+  }
   await emitirRanking(rodadaId);
 }
 async function resetarRodada(rodadaId: string) {
@@ -125,7 +146,8 @@ async function resetarRodada(rodadaId: string) {
   const ids = (jogadores ?? []).map((j: any) => j.id);
   if (ids.length) await db.from("resposta").delete().in("jogador_id", ids);
   await db.from("jogador").update({
-    pontos: 0, acertos: 0, erros: 0, situacao: "aguardando", indice_atual: 0, pergunta_iniciada_em: null,
+    pontos: 0, acertos: 0, erros: 0, situacao: "aguardando", indice_atual: 0,
+    pergunta_iniciada_em: null, ordem_perguntas: null,
   }).eq("rodada_id", rodadaId);
   await db.from("rodada").update({ travada: true }).eq("id", rodadaId);
   await emitirRanking(rodadaId);
@@ -172,8 +194,10 @@ async function estadoDe(token: string, feedback?: any) {
   if (j.situacao === "terminou" || j.indice_atual >= total) return { ...base, situacao: "terminou" };
   if (j.situacao === "aguardando") return { ...base, situacao: "aguardando" };
 
-  // em-jogo: devolve a pergunta atual SEM o gabarito
-  const q = perguntas[j.indice_atual];
+  // em-jogo: devolve a pergunta atual SEM o gabarito. ordem_perguntas é a sequência
+  // embaralhada DESTE jogador (cada um começa com uma ordem própria e aleatória).
+  const ordem = j.ordem_perguntas?.length === total ? j.ordem_perguntas : perguntas.map((_: any, i: number) => i);
+  const q = perguntas[ordem[j.indice_atual]];
   if (!q) return { ...base, situacao: "terminou" };
   const segs = q.segundos ?? rodada.segundos;
   const totalMs = segs * 1000;
@@ -185,7 +209,7 @@ async function estadoDe(token: string, feedback?: any) {
     await db.from("jogador").update({ pergunta_iniciada_em: new Date(inicio).toISOString() }).eq("id", j.id);
   }
   const restanteMs = Math.max(0, totalMs - (Date.now() - inicio));
-  const prox = perguntas[j.indice_atual + 1];
+  const prox = perguntas[ordem[j.indice_atual + 1]];
   return {
     ...base, situacao: "em-jogo",
     pergunta: {
@@ -278,9 +302,12 @@ Deno.serve(async (req) => {
       if (rodada.travada) return json(await estadoDe(bearer)); // continua aguardando
       if (j.situacao === "aguardando") {
         // null: estadoDe() carimba o início na mesma resposta, o mais perto possível
-        // do momento em que a pergunta realmente aparece pro jogador.
+        // do momento em que a pergunta realmente aparece pro jogador. ordem_perguntas:
+        // embaralha as perguntas só pra ESTE jogador (cada um que começa embaralha diferente).
+        const total = (await perguntasDaRodada(j.rodada_id)).length;
         await db.from("jogador").update({
           situacao: "em-jogo", indice_atual: 0, pergunta_iniciada_em: null,
+          ordem_perguntas: ordemAleatoria(total),
         }).eq("id", j.id);
         await emitirRanking(rodada.id);
       }
@@ -295,7 +322,8 @@ Deno.serve(async (req) => {
       const { data: rodada } = await db.from("rodada").select("*").eq("id", j.rodada_id).single();
       if (rodada.status !== "aberta" || j.situacao !== "em-jogo") return erro("Fora de jogo.", 409);
       const perguntas = await perguntasDaRodada(j.rodada_id);
-      const q = perguntas[j.indice_atual];
+      const ordemJ = j.ordem_perguntas?.length === perguntas.length ? j.ordem_perguntas : perguntas.map((_: any, i: number) => i);
+      const q = perguntas[ordemJ[j.indice_atual]];
       if (!q || q.pergunta_id !== body.perguntaId) return erro("Pergunta fora de sincronia.", 409);
 
       // resposta repetida -> 409 (o cliente trata como já registrada)
@@ -480,9 +508,14 @@ Deno.serve(async (req) => {
         const { data: rodadaDoJogador } = await db.from("rodada").select("tenant_id").eq("id", jogador.rodada_id).maybeSingle();
         if (!rodadaDoJogador || rodadaDoJogador.tenant_id !== tenant.id) return erro("Jogador não encontrado.", 404);
         const perguntas = await perguntasDaRodada(jogador.rodada_id);
+        // ordem_perguntas: a sequência embaralhada DESTE jogador — sem ela, a numeração/
+        // pergunta mostrada bateria com a de outro jogador, não com a dele.
+        const ordemJog = jogador.ordem_perguntas?.length === perguntas.length
+          ? jogador.ordem_perguntas : perguntas.map((_: any, i: number) => i);
         const { data: respostas } = await db.from("resposta").select("*").eq("jogador_id", jogador.id).order("ordem");
         const porOrdem = new Map((respostas ?? []).map((r: any) => [r.ordem, r]));
-        const linhas = perguntas.map((q: any, i: number) => {
+        const linhas = ordemJog.map((pIdx: number, i: number) => {
+          const q = perguntas[pIdx];
           const r: any = porOrdem.get(i);
           return {
             numero: i + 1, tema: q.tema, texto: q.texto,
@@ -523,8 +556,11 @@ Deno.serve(async (req) => {
       const cabecalho = ["nome", "cargo", "loja", "pontos", "acertos", "erros",
         ...perguntas.flatMap((_: any, i: number) => [`P${i + 1} resposta`, `P${i + 1} certo`])];
       const linhas = (jogadores ?? []).map((j: any) => {
+        // ordem_perguntas: cada jogador embaralhou diferente — "P1" é a 1ª que ELE pegou.
+        const ordemJ = j.ordem_perguntas?.length === perguntas.length ? j.ordem_perguntas : perguntas.map((_: any, i: number) => i);
         const respostasDoJogador = respPorJogador.get(j.id) ?? new Map();
-        const colunas = perguntas.flatMap((q: any, i: number) => {
+        const colunas = ordemJ.flatMap((pIdx: number, i: number) => {
+          const q = perguntas[pIdx];
           const r = respostasDoJogador.get(i);
           return [r ? q.opcoes[r.opcao] : "", r ? (r.acertou ? "sim" : "não") : "não respondeu"];
         });

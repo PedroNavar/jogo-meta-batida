@@ -40,6 +40,9 @@ function desenharBlocos() {
  sel.replaceChildren(elemento('option','Todas (sem bloco)'));sel.firstChild.value='';
  for(const b of estado.blocos){const o=elemento('option',b);o.value=b;sel.append(o);}
  sel.value=atual;
+ // Sugestão (datalist) nos campos de texto "Bloco" do cadastro/edição de pergunta —
+ // evita digitar o nome de um bloco já existente com erro de digitação.
+ $('blocos-existentes').replaceChildren(...estado.blocos.map(b=>{const o=elemento('option');o.value=b;return o;}));
 }
 function desenharLojas() {
  const sel=$('r-loja'),atual=sel.value;
@@ -98,7 +101,7 @@ function novaLinhaPergunta() {
  const correta=elemento('select');
  for(let i=0;i<4;i++){const o=elemento('option','Correta: '+String.fromCharCode(65+i));o.value=String(i);correta.append(o);}
  const segundos=input('number','Segundos (padrão da rodada)');segundos.min='5';segundos.max='3600';
- const bloco=input('text','Bloco (opcional, ex.: Bloco 1)');
+ const bloco=input('text','Bloco (opcional, ex.: Bloco 1)');bloco.setAttribute('list','blocos-existentes');
  const imagem=input('text','URL da imagem (opcional)');
  const remover=botao('Remover esta pergunta',()=>linha.remove());
  linha.append(texto,tipo,tema,...opcoes,correta,segundos,bloco,imagem,remover);
@@ -132,11 +135,39 @@ function linhaPerguntaExistente(p,acoes) {
  return div;
 }
 async function acaoPergunta(acao,id) {await chamar(acao,{id});await atualizar();}
+function editarPergunta(p) {
+ const div=elemento('div');
+ const texto=input('text','Pergunta');texto.value=p.texto;
+ const tipo=input('text','Tipo');tipo.value=p.tipo||'';
+ const tema=input('text','Tema');tema.value=p.tema||'';
+ const opcoes=p.opcoes.map((o,i)=>{const inp=input('text','Opção '+String.fromCharCode(65+i));inp.value=o;return inp;});
+ const correta=elemento('select');
+ for(let i=0;i<4;i++){const o=elemento('option','Correta: '+String.fromCharCode(65+i));o.value=String(i);correta.append(o);}
+ correta.value=String(p.correta);
+ const segundos=input('number','Segundos (padrão da rodada)');segundos.min='5';segundos.max='3600';if(p.segundos)segundos.value=p.segundos;
+ const bloco=input('text','Bloco (opcional)');bloco.value=p.bloco||'';bloco.setAttribute('list','blocos-existentes');
+ const imagem=input('text','URL da imagem (opcional)');imagem.value=p.imagem||'';
+ const salvar=botao('Salvar alterações',async()=>{
+  const opcoesVal=opcoes.map(o=>o.value.trim());
+  if(!texto.value.trim() || opcoesVal.some(o=>!o)) {mensagem('Preencha o texto e as 4 opções.');return;}
+  await chamar('pergunta-editar',{
+   id:p.id,texto:texto.value.trim(),tipo:tipo.value.trim()||null,tema:tema.value.trim()||null,
+   opcoes:opcoesVal,correta:Number(correta.value),segundos:segundos.value?Number(segundos.value):null,
+   bloco:bloco.value.trim()||null,imagem:imagem.value.trim()||null,
+  });
+  $('detalhe').close();mensagem('Pergunta atualizada.');
+  await atualizar();
+ },'principal');
+ div.append(texto,tipo,tema,...opcoes,correta,segundos,bloco,imagem,salvar);
+ abrirDetalhe('Editar pergunta',div);
+}
 function desenharPerguntas() {
  $('lista-ativas').replaceChildren(...estado.perguntasAtivas.map(p=>linhaPerguntaExistente(p,[
+  ['Editar',()=>editarPergunta(p)],
   ['Ocultar',()=>acaoPergunta('pergunta-ocultar',p.id)],['Excluir',()=>acaoPergunta('pergunta-excluir',p.id)],
  ])));
  $('lista-ocultas').replaceChildren(...estado.perguntasOcultas.map(p=>linhaPerguntaExistente(p,[
+  ['Editar',()=>editarPergunta(p)],
   ['Reativar',()=>acaoPergunta('pergunta-reativar',p.id)],['Excluir',()=>acaoPergunta('pergunta-excluir',p.id)],
  ])));
  $('lista-excluidas').replaceChildren(...estado.perguntasExcluidas.map(p=>linhaPerguntaExistente(p,[
