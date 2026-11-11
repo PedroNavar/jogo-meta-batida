@@ -1,0 +1,4 @@
+-- Senhas REAIS da Sipolatti (dadas pelo Pedro em chat) definidas via definir_senha_admin/
+-- definir_senha_gerente, substituindo as de teste — já aplicadas no banco remoto.
+-- Redigido aqui de propósito antes do commit: repo é público, senha não entra em texto
+-- puro no histórico do git (ver memória da sessão pra recuperar o valor, se precisar).
