@@ -42,6 +42,10 @@ function desenharRodadas() {
   csv.href=API+'/admin/csv?c='+encodeURIComponent(CLIENTE)+'&rodadaId='+encodeURIComponent(r.id)+'&senha='+encodeURIComponent(senha);
   csv.target='_blank';csv.rel='noopener';
   barra.append(csv);
+  const xlsx=elemento('a','Exportar Excel (com cores)','discreto');
+  xlsx.href=API+'/admin/xlsx?c='+encodeURIComponent(CLIENTE)+'&rodadaId='+encodeURIComponent(r.id)+'&senha='+encodeURIComponent(senha);
+  xlsx.target='_blank';xlsx.rel='noopener';
+  barra.append(xlsx);
   card.append(barra);
   return card;
  }));

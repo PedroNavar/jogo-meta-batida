@@ -6,6 +6,7 @@
 // Contrato: docs/contrato-api.md. Pontuação 500–1000 por velocidade, no servidor.
 // ============================================================================
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import ExcelJS from "npm:exceljs@4.4.0";
 
 const URL_SB = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -104,6 +105,35 @@ async function congelar(rodada: any) {
 async function perguntasDaRodada(rodadaId: string) {
   const { data } = await db.from("rodada_pergunta").select("*").eq("rodada_id", rodadaId).order("ordem");
   return data ?? [];
+}
+
+// ---- Dados crus pro relatório (CSV e Excel compartilham a mesma consulta) --
+async function dadosRelatorio(rodadaId: string) {
+  const perguntas = await perguntasDaRodada(rodadaId);
+  const { data: jogadores } = await db.from("jogador").select("*").eq("rodada_id", rodadaId).order("pontos", { ascending: false });
+  const { data: todasRespostas } = await db.from("resposta").select("*")
+    .in("jogador_id", (jogadores ?? []).map((j: any) => j.id));
+  const respPorJogador = new Map<string, Map<number, any>>();
+  for (const r of todasRespostas ?? []) {
+    if (!respPorJogador.has(r.jogador_id)) respPorJogador.set(r.jogador_id, new Map());
+    respPorJogador.get(r.jogador_id)!.set(r.ordem, r);
+  }
+  return { perguntas, jogadores: jogadores ?? [], respPorJogador };
+}
+// Resultado de 1 jogador em cada pergunta da rodada, na ordem que ELE jogou (ordem_perguntas
+// é embaralhada por jogador). "tempo-esgotado" e "nao-chegou" são distintos: o 1º é uma
+// resposta registrada sem opção (relógio zerou); o 2º é a ausência de qualquer resposta
+// (ex.: rodada encerrada no meio do jogo dele).
+function respostaDoJogador(j: any, perguntas: any[], respPorJogador: Map<string, Map<number, any>>) {
+  const ordemJ = j.ordem_perguntas?.length === perguntas.length ? j.ordem_perguntas : perguntas.map((_: any, i: number) => i);
+  const respostas = respPorJogador.get(j.id) ?? new Map();
+  return ordemJ.map((pIdx: number, i: number) => {
+    const q = perguntas[pIdx];
+    const r = respostas.get(i);
+    if (!r) return { texto: "", estado: "nao-chegou" as const };
+    if (r.opcao == null) return { texto: "", estado: "tempo-esgotado" as const };
+    return { texto: q.opcoes[r.opcao], estado: (r.acertou ? "correta" : "errada") as const };
+  });
 }
 
 // ---- Rodada vista pelo gerente/regional (resumo + a postos) ----------------
@@ -643,33 +673,71 @@ Deno.serve(async (req) => {
       const rodadaId = url.searchParams.get("rodadaId");
       const { data: rodada } = await db.from("rodada").select("id").eq("id", rodadaId).eq("tenant_id", tenant.id).maybeSingle();
       if (!rodada) return erro("Rodada não encontrada.", 404);
-      const perguntas = await perguntasDaRodada(rodada.id);
-      const { data: jogadores } = await db.from("jogador").select("*").eq("rodada_id", rodada.id).order("pontos", { ascending: false });
-      const { data: todasRespostas } = await db.from("resposta").select("*")
-        .in("jogador_id", (jogadores ?? []).map((j: any) => j.id));
-      const respPorJogador = new Map<string, Map<number, any>>();
-      for (const r of todasRespostas ?? []) {
-        if (!respPorJogador.has(r.jogador_id)) respPorJogador.set(r.jogador_id, new Map());
-        respPorJogador.get(r.jogador_id)!.set(r.ordem, r);
-      }
+      const { perguntas, jogadores, respPorJogador } = await dadosRelatorio(rodada.id);
+      const ESTADO_TEXTO: Record<string, string> = {
+        correta: "sim", errada: "não", "tempo-esgotado": "não respondeu (tempo esgotado)", "nao-chegou": "não respondeu",
+      };
       const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
       const cabecalho = ["nome", "cargo", "loja", "pontos", "acertos", "erros",
         ...perguntas.flatMap((_: any, i: number) => [`P${i + 1} resposta`, `P${i + 1} certo`])];
-      const linhas = (jogadores ?? []).map((j: any) => {
-        // ordem_perguntas: cada jogador embaralhou diferente — "P1" é a 1ª que ELE pegou.
-        const ordemJ = j.ordem_perguntas?.length === perguntas.length ? j.ordem_perguntas : perguntas.map((_: any, i: number) => i);
-        const respostasDoJogador = respPorJogador.get(j.id) ?? new Map();
-        const colunas = ordemJ.flatMap((pIdx: number, i: number) => {
-          const q = perguntas[pIdx];
-          const r = respostasDoJogador.get(i);
-          return [r && r.opcao != null ? q.opcoes[r.opcao] : "", r ? (r.opcao == null ? "não respondeu (tempo esgotado)" : (r.acertou ? "sim" : "não")) : "não respondeu"];
-        });
+      const linhas = jogadores.map((j: any) => {
+        const colunas = respostaDoJogador(j, perguntas, respPorJogador)
+          .flatMap((r) => [r.texto, ESTADO_TEXTO[r.estado]]);
         return [j.nome, j.cargo, j.loja ?? "", j.pontos, j.acertos, j.erros, ...colunas];
       });
       const csv = [cabecalho, ...linhas].map((l) => l.map(esc).join(",")).join("\r\n");
       return new Response("﻿" + csv, {
         headers: { ...CORS, "Content-Type": "text/csv; charset=utf-8",
           "Content-Disposition": `attachment; filename="rodada-${rodada.id}.csv"` },
+      });
+    }
+
+    // ---------------- GET /admin/xlsx (mesmo relatório do CSV, mas com cor por célula:
+    // verde=acertou, vermelho leve=errou, amarelo=tempo esgotado, cinza=nunca chegou nela) --
+    if (rota === "/admin/xlsx" && req.method === "GET") {
+      const tenant = await tenantPorSlug(url.searchParams.get("c"));
+      if (!tenant) return erro("Cliente não encontrado.", 404);
+      const { data: senhaOk } = await db.rpc("verificar_senha_admin", {
+        p_tenant_id: tenant.id, p_senha: url.searchParams.get("senha") ?? "",
+      });
+      if (!senhaOk) return erro("Senha incorreta.", 401);
+      const rodadaId = url.searchParams.get("rodadaId");
+      const { data: rodada } = await db.from("rodada").select("id,nome").eq("id", rodadaId).eq("tenant_id", tenant.id).maybeSingle();
+      if (!rodada) return erro("Rodada não encontrada.", 404);
+      const { perguntas, jogadores, respPorJogador } = await dadosRelatorio(rodada.id);
+
+      const CORES_CELULA: Record<string, { fill: string; font: string }> = {
+        correta: { fill: "FFC6EFCE", font: "FF006100" },
+        errada: { fill: "FFFFC7CE", font: "FF9C0006" },
+        "tempo-esgotado": { fill: "FFFFEB9C", font: "FF9C6500" },
+        "nao-chegou": { fill: "FFF2F2F2", font: "FF808080" },
+      };
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet((rodada.nome ?? "Resultado").slice(0, 31));
+      const cabecalho = ["Nome", "Cargo", "Loja", "Pontos", "Acertos", "Erros",
+        ...perguntas.map((_: any, i: number) => `P${i + 1}`)];
+      ws.addRow(cabecalho);
+      ws.getRow(1).font = { bold: true };
+      ws.getRow(1).eachCell((cel: any) => { cel.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0E0E0" } }; });
+      ws.views = [{ state: "frozen", ySplit: 1 }];
+
+      for (const j of jogadores) {
+        const respostas = respostaDoJogador(j, perguntas, respPorJogador);
+        const linha = ws.addRow([j.nome, j.cargo, j.loja ?? "", j.pontos, j.acertos, j.erros,
+          ...respostas.map((r) => r.estado === "tempo-esgotado" ? "(tempo esgotado)" : r.texto)]);
+        respostas.forEach((r, i) => {
+          const cor = CORES_CELULA[r.estado];
+          const cel = linha.getCell(7 + i);
+          cel.fill = { type: "pattern", pattern: "solid", fgColor: { argb: cor.fill } };
+          cel.font = { color: { argb: cor.font } };
+        });
+      }
+      ws.columns.forEach((col: any, i: number) => { col.width = i === 0 ? 22 : i < 3 ? 16 : i < 6 ? 9 : 22; });
+
+      const buffer = await wb.xlsx.writeBuffer();
+      return new Response(buffer, {
+        headers: { ...CORS, "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="rodada-${rodada.id}.xlsx"` },
       });
     }
 
