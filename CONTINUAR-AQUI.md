@@ -446,3 +446,25 @@ ideias e arquitetura (Supabase, Edge Functions, frontend reaproveitável, multi-
 
 **Não fazer isso ainda**, a não ser que o Pedro peça explicitamente — ele quer terminar a
 versão da Metta primeiro. Isto aqui é só o registro pra não esquecer.
+
+## 12. BUG REAL corrigido em 2026-11-14 — jogador travava se o tempo esgotasse sem resposta
+
+O Pedro perguntou "se não responder a tempo, conta como erro e avança?" — testei ao vivo
+(rodada de teste isolada, depois encerrada) e **não contava**: o jogador ficava preso na
+mesma pergunta pra sempre, `restanteMs` parado em 0, nunca virava erro, nunca avançava. Bug
+real, não comportamento pensado.
+
+**Corrigido:** `estadoDe()` em `supabase/functions/api/index.ts` agora detecta
+`restanteMs<=0` sem resposta registrada pra aquele índice, grava uma `resposta` com
+`opcao=null, acertou=false, pontos=0`, incrementa `erros`, avança `indice_atual` e devolve
+o mesmo feedback de "errou" (`"Tempo esgotado! 0 pontos."`). Migration
+`20261114164916_resposta_opcao_nula_timeout.sql` tirou o `not null`/`check 0-3` de
+`resposta.opcao` pra caber `null` (= "não respondeu", diferente de "respondeu errado").
+`jogador-detalhe` e o CSV do admin mostram **"não respondeu (tempo esgotado)"** nesse caso
+(distinto de "não respondeu" simples, que é quando o jogador nunca chegou a ver a
+pergunta — ex.: rodada encerrada no meio do jogo dele).
+
+Testado ao vivo 2x (criei rodada → deixei o tempo esgotar sem clicar → conferi):
+1ª vez confirmou o bug; depois do deploy, 2ª vez confirmou o fix (erro registrado, avançou
+pra pergunta 2 com relógio novo, CSV e jogador-detalhe mostrando certo). Deployado,
+commitado e pushado (`a3e5a15`).
