@@ -468,3 +468,27 @@ Testado ao vivo 2x (criei rodada → deixei o tempo esgotar sem clicar → confe
 1ª vez confirmou o bug; depois do deploy, 2ª vez confirmou o fix (erro registrado, avançou
 pra pergunta 2 com relógio novo, CSV e jogador-detalhe mostrando certo). Deployado,
 commitado e pushado (`a3e5a15`).
+
+## 13. Export em Excel (.xlsx) com cor por resultado — ✅ FEITO em 2026-11-14
+
+Pedido do Pedro (ele e outros consultores da Metta usam o painel, então pediu Excel com
+cor em vez de sessão de token pro admin — decisão dele, registrada aqui pra não
+reconsiderar sem necessidade). Novo `GET /admin/xlsx?c=&rodadaId=&senha=` usa
+**ExcelJS via `npm:exceljs@4.4.0`** (import `npm:` funciona normal em Edge Function/Deno,
+sem precisar de Docker nem nada especial). Mesmo relatório do CSV, mas cada célula de
+pergunta tem cor: **verde**=acertou, **vermelho leve**=errou, **amarelo**=tempo esgotado
+sem responder (ver seção 12), **cinza**=nunca chegou nessa pergunta. Botão "Exportar
+Excel (com cores)" ao lado do "Exportar CSV" em cada card de rodada do admin — o CSV
+continua existindo, não foi removido.
+
+Refatorei a lógica de consulta (`dadosRelatorio`) e de estado por pergunta
+(`respostaDoJogador`) pra ser compartilhada entre `/admin/csv` e `/admin/xlsx` — antes só
+existia dentro do CSV. Testado baixando o `.xlsx` de verdade via curl e inspecionando com
+`openpyxl` (3 das 4 cores confirmadas em dados reais da Vilarejo; a 4ª — vermelho/errou —
+usa a mesma lógica já testada da resposta errada). Confirmado no browser que o botão
+aparece certo em todas as rodadas. Commit `5e87c2c`.
+
+**Decisão explícita do Pedro (2026-11-14):** NÃO trocar o login do admin por sessão/token
+— ele e outros consultores da Metta vão usar o painel, então a senha simples por chamada
+continua sendo o jeito combinado (ver "Limitações conhecidas" na seção 10). Não mexer
+nisso sem ele pedir de novo.
