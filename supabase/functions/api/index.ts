@@ -209,6 +209,28 @@ async function estadoDe(token: string, feedback?: any) {
     await db.from("jogador").update({ pergunta_iniciada_em: new Date(inicio).toISOString() }).eq("id", j.id);
   }
   const restanteMs = Math.max(0, totalMs - (Date.now() - inicio));
+  // Tempo esgotado sem resposta: registra como erro (0 pts, opcao null = "não respondeu")
+  // e avança pra próxima pergunta — igual ao /responder, mas disparado pelo relógio em vez
+  // de um clique. Até 2026-11-14 isso não existia e o jogador ficava travado pra sempre.
+  if (restanteMs <= 0) {
+    const { data: jaRespondeu } = await db.from("resposta").select("ordem")
+      .eq("jogador_id", j.id).eq("ordem", j.indice_atual).maybeSingle();
+    if (!jaRespondeu) {
+      const { error: insErro } = await db.from("resposta").insert({
+        jogador_id: j.id, ordem: j.indice_atual, opcao: null, acertou: false, pontos: 0, ms: totalMs,
+      });
+      if (!insErro) {
+        const proximo = j.indice_atual + 1;
+        const terminou = proximo >= total;
+        await db.from("jogador").update({
+          erros: j.erros + 1, indice_atual: proximo,
+          situacao: terminou ? "terminou" : "em-jogo", pergunta_iniciada_em: null,
+        }).eq("id", j.id);
+        await emitirRanking(rodada.id);
+        return estadoDe(token, terminou ? undefined : { mensagem: "Tempo esgotado! 0 pontos.", pontos: 0, restanteMs: 2500 });
+      }
+    }
+  }
   const prox = perguntas[ordem[j.indice_atual + 1]];
   return {
     ...base, situacao: "em-jogo",
@@ -585,8 +607,8 @@ Deno.serve(async (req) => {
           const r: any = porOrdem.get(i);
           return {
             numero: i + 1, tema: q.tema, texto: q.texto,
-            opcaoEscolhida: r ? q.opcoes[r.opcao] : null, opcaoCorreta: q.opcoes[q.correta],
-            acertou: r ? r.acertou : null, pontos: r ? r.pontos : 0, respondeu: !!r,
+            opcaoEscolhida: r && r.opcao != null ? q.opcoes[r.opcao] : null, opcaoCorreta: q.opcoes[q.correta],
+            acertou: r ? r.acertou : null, pontos: r ? r.pontos : 0, respondeu: !!(r && r.opcao != null),
           };
         });
         return json({
@@ -640,7 +662,7 @@ Deno.serve(async (req) => {
         const colunas = ordemJ.flatMap((pIdx: number, i: number) => {
           const q = perguntas[pIdx];
           const r = respostasDoJogador.get(i);
-          return [r ? q.opcoes[r.opcao] : "", r ? (r.acertou ? "sim" : "não") : "não respondeu"];
+          return [r && r.opcao != null ? q.opcoes[r.opcao] : "", r ? (r.opcao == null ? "não respondeu (tempo esgotado)" : (r.acertou ? "sim" : "não")) : "não respondeu"];
         });
         return [j.nome, j.cargo, j.loja ?? "", j.pontos, j.acertos, j.erros, ...colunas];
       });
