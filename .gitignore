@@ -1,1 +1,9 @@
 supabase/.temp/
+
+# Claude Code e segredos: nunca no Git (auditoria 17/11/2026).
+.claude/
+settings.local.json
+*.local.json
+.env
+.env.*
+!.env.example
