@@ -469,6 +469,68 @@ Testado ao vivo 2x (criei rodada → deixei o tempo esgotar sem clicar → confe
 pra pergunta 2 com relógio novo, CSV e jogador-detalhe mostrando certo). Deployado,
 commitado e pushado (`a3e5a15`).
 
+## 14. Tela "Novo cliente" — criar tenant pelo admin, sem deploy — ✅ FEITO em 2026-11-18
+
+Pedro pediu depois de eu mostrar um mapa do processo do jogo ("tem aí a tela do admin que
+permite criar para novos clientes, trocando até a logo?"). Resposta na hora: não existia —
+cliente novo sempre foi feito por mim na mão (migration SQL + arquivo + deploy). Grillei as
+6 decisões de arquitetura antes de escrever (skill `grilling`, regra do CLAUDE.md pra
+criação do zero) — todas aceitas:
+
+1. **Sem subpasta própria pro cliente novo** — resolvido só por `?c=slug` nos MESMOS
+   arquivos HTML da raiz (uma Edge Function não cria arquivo no repo nem dispara deploy do
+   Pages). Sipolatti e Vilarejo continuam com subpasta própria, sem mudança.
+2. **Senha MASTER separada**, só do Pedro — não é a senha de admin de nenhum tenant.
+3. **Logo continua sendo URL** (sem Supabase Storage/upload de arquivo de verdade).
+4. **Tela só pede identidade** (nome, slug, logo, cor, senha gerente/admin) — loja e
+   rodada o Pedro cadastra depois, já dentro do admin do cliente novo.
+5. **Continua sendo cliente DA METTA** — não é o início da versão sem marca pro MEI
+   (seção 11; essa segue intocada até ele pedir).
+6. **Pedro digita as duas senhas** na hora de criar (sem o sistema gerar/mostrar).
+
+**O que foi feito:**
+- `supabase/migrations/20261118111222_config_global_senha_master.sql`: tabela
+  `config_global` (1 linha só) + `verificar_senha_master`/`definir_senha_master` (mesmo
+  padrão pgcrypto das outras senhas).
+- `POST /tenant-criar` em `api/index.ts` — sem `?c=` (não é tenant-scoped): valida a senha
+  master, valida slug (`[a-z0-9-]+`, único), cria o tenant e já chama
+  `definir_senha_gerente`/`definir_senha_admin` pra ele. **Pendência resolvida no caminho:**
+  usar `"TODO-hash"` como placeholder fez o pre-commit hook de segurança (auditoria
+  17/11) barrar o commit, achando que era segredo em texto puro — troquei pra
+  `"placeholder"` (está na lista de falsos-positivos do próprio hook).
+- `GET/acao "estado"` do `/admin` passou a devolver `tenant:{nome,cor,logo}` também (não só
+  o `/config` do jogador) — o admin do cliente novo já nasce com a cara certa.
+- `frontend/clientes.html` + `frontend/js/clientes.js`: página nova, fora de qualquer
+  tenant, com login por senha master e o formulário de criar cliente. Depois de criar,
+  mostra os 4 links prontos (jogo, telão, gerente, admin) já com `?c=slug`.
+- `aplicarMarca()` (`cliente.js`) agora também troca `<img class="logo-cliente">` (src +
+  alt) em tempo real, não só a cor — necessário pro cliente sem subpasta ter logo própria.
+- `config.js`: `?c=` na URL agora GANHA da subpasta (prioridade), caindo pra detecção por
+  subpasta e depois pro default `'sipolatti'` se não tiver nenhum dos dois.
+- Novo `linkComTenant()` em `cliente.js`: todo link gerado pro jogador compartilhar
+  (criar-rodada no `index.html`, link do jogo/telão no `gerente.js` e no `admin.js`) agora
+  sempre carrega `?c=slug` — sem isso, um cliente sem subpasta perderia o contexto do
+  tenant ao navegar pra outra página.
+
+**Testado ponta a ponta** (curl + browser, servindo local na porta 5180): criei 2 clientes
+de teste (`qa-cliente` via curl, `qa-browser` pelo formulário de verdade no navegador) —
+senha master errada rejeitada, slug duplicado rejeitado (409), `/config?c=qa-browser`
+devolvendo a logo/cor certas, `index.html?c=qa-browser` trocando a logo/cor/`--amarelo` e
+o link "criar rodada" na tela real, admin e gerente do cliente novo logando e criando
+rodada, link de rodada do admin carregando `&c=qa-browser` certinho. Depois apaguei os 2
+tenants de teste (cascata via FK: loja/pergunta/rodada somem junto).
+
+**Link:** https://pedronavar.github.io/jogo-meta-batida/clientes.html
+**Senha master:** gerada e mostrada ao Pedro uma vez no chat em 2026-11-18 — NÃO está em
+texto puro em lugar nenhum do repositório; se perder, trocar com uma migration nova
+chamando `definir_senha_master('...')` e redigindo o arquivo antes do commit (mesmo padrão
+das outras senhas).
+
+**Limitação conhecida:** `<title>` da aba e qualquer texto fixo "Sipolatti" dentro do HTML
+(fora da `<img class="logo-cliente">`) não trocam dinamicamente — um cliente sem subpasta
+própria vai ver a aba do navegador escrito "Sipolatti" mesmo sendo outro cliente. Cosmético,
+não afeta nada funcional; só mexer se incomodar de verdade.
+
 ## 13. Export em Excel (.xlsx) com cor por resultado — ✅ FEITO em 2026-11-14
 
 Pedido do Pedro (ele e outros consultores da Metta usam o painel, então pediu Excel com
