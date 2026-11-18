@@ -417,6 +417,27 @@ Deno.serve(async (req) => {
       return json(await estadoDe(bearer, terminou ? undefined : feedback));
     }
 
+    // ---------------- POST /tenant-criar (senha MASTER — cria um cliente novo) --------
+    if (rota === "/tenant-criar" && req.method === "POST") {
+      const { data: senhaOk } = await db.rpc("verificar_senha_master", { p_senha: String(body.senhaMaster ?? "") });
+      if (!senhaOk) return erro("Senha incorreta.", 401);
+      const slug = String(body.slug ?? "").trim().toLowerCase();
+      if (!/^[a-z0-9-]+$/.test(slug)) return erro("Slug inválido: use só letras minúsculas, números e hífen.");
+      const nome = String(body.nome ?? "").trim();
+      if (!nome) return erro("Informe o nome do cliente.");
+      if (!body.senhaGerente || !body.senhaAdmin) return erro("Informe as duas senhas (gerente e admin).");
+      const { data: existe } = await db.from("tenant").select("id").eq("slug", slug).maybeSingle();
+      if (existe) return erro("Já existe um cliente com esse slug.", 409);
+      const { data: novo, error } = await db.from("tenant").insert({
+        slug, nome, logo_url: body.logoUrl || null, cor_primaria: body.cor || null,
+        senha_gerente_hash: "placeholder", senha_admin_hash: "placeholder",
+      }).select("id").single();
+      if (error || !novo) return erro("Não foi possível criar o cliente: " + (error?.message ?? ""), 500);
+      await db.rpc("definir_senha_gerente", { p_tenant_id: novo.id, p_senha: String(body.senhaGerente) });
+      await db.rpc("definir_senha_admin", { p_tenant_id: novo.id, p_senha: String(body.senhaAdmin) });
+      return json({ id: novo.id, slug });
+    }
+
     // ---------------- POST /gerente ----------------
     if (rota === "/gerente" && req.method === "POST") {
       const tenant = await tenantPorSlug(url.searchParams.get("c"));
@@ -494,6 +515,7 @@ Deno.serve(async (req) => {
           perguntasExcluidas: ps.filter((p: any) => p.excluida_em)
             .map((p: any) => ({ id: p.id, texto: p.texto, bloco: p.bloco, excluidaEm: p.excluida_em })),
           blocos, lojas: lojas ?? [],
+          tenant: { nome: tenant.nome, cor: tenant.cor_primaria, logo: tenant.logo_url },
         });
       }
 

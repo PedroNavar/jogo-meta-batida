@@ -4,10 +4,21 @@ export const pausa=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 // URL absoluta da PASTA da página atual (sem o nome do arquivo). Serve pra montar links pra
 // copiar/compartilhar que funcionem tanto na raiz quanto numa subpasta de cliente (ex.: /vilarejo/).
 export const baseUrl=()=>new URL('.',location.href).href;
-// Marca por tenant: cor_primaria substitui o amarelo padrão nas páginas do jogo (jogo/telão/
-// gerente) sem precisar de CSS por cliente. Chame de novo a cada /config recebido — idempotente.
+// Mesma ideia, mas pra link de OUTRA página (ex.: telao.html) a partir da pasta atual, já
+// com '?c=' do cliente — obrigatório pra cliente sem subpasta própria (resolvido só por
+// ?c=), inofensivo pros que já têm subpasta (o '?c=' bate com o que a subpasta já resolvia).
+export function linkComTenant(caminho) {
+ const [arquivo,busca='']=caminho.split('?');
+ const params=new URLSearchParams(busca);params.set('c',CLIENTE);
+ return baseUrl()+arquivo+'?'+params.toString();
+}
+// Marca por tenant: cor_primaria substitui o amarelo padrão, e a logo troca em qualquer
+// <img class="logo-cliente"> da página — sem precisar de CSS/HTML por cliente (cliente sem
+// subpasta própria, resolvido só por ?c=, também fica com a cara certa). Chame de novo a
+// cada /config (ou /admin "estado") recebido — idempotente.
 export function aplicarMarca(config) {
  if(config?.tenant?.cor)document.documentElement.style.setProperty('--amarelo',config.tenant.cor);
+ if(config?.tenant?.logo)for(const img of document.querySelectorAll('.logo-cliente')){img.src=config.tenant.logo;if(config.tenant.nome)img.alt=config.tenant.nome;}
 }
 const sb=createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false}});
 // /config, /entrar, /gerente e /admin(/csv) resolvem o tenant por ?c=; as demais rotas já

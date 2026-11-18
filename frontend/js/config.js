@@ -1,9 +1,12 @@
 export const SUPABASE_URL = "https://pmcyfsajhwdjtqwjbjik.supabase.co";
 export const SUPABASE_KEY = "sb_publishable_aUuHpcqxIlf0ZNuEZZWZwg_RcyDQ4vd";
 export const API = SUPABASE_URL + "/functions/v1/api";
-// Cada cliente novo ganha uma subpasta própria (ex.: /vilarejo/) com seu HTML e logo, mas
-// reaproveita este mesmo js/ e css/. O tenant é resolvido pelo nome dessa subpasta na URL;
-// fora de uma pasta de cliente conhecida, cai no cliente original (Sipolatti, na raiz).
+// Um cliente pode ter subpasta própria (ex.: /vilarejo/, com HTML e logo dedicados) OU
+// não ter subpasta nenhuma e ser resolvido só por "?c=slug" na URL (criado pelo admin, sem
+// precisar de deploy de arquivo — a marca, nesse caso, vem toda do /config em tempo real,
+// ver aplicarMarca() em cliente.js). "?c=" na URL sempre GANHA da subpasta quando os dois
+// aparecem (não deveria acontecer, mas não custa ser explícito).
 const CLIENTES_CONHECIDOS = ["vilarejo"];
 const segmentos = (globalThis.location?.pathname ?? "").split("/").filter(Boolean);
-export const CLIENTE = segmentos.find((s) => CLIENTES_CONHECIDOS.includes(s)) ?? "sipolatti";
+const paramC = new URLSearchParams(globalThis.location?.search ?? "").get("c");
+export const CLIENTE = paramC || segmentos.find((s) => CLIENTES_CONHECIDOS.includes(s)) || "sipolatti";

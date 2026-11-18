@@ -1,4 +1,4 @@
-import { api, elemento, baseUrl } from './cliente.js';
+import { api, elemento, linkComTenant, aplicarMarca } from './cliente.js';
 import { API, CLIENTE } from './config.js';
 const $=id=>document.getElementById(id);
 let senha='',estado=null;
@@ -27,8 +27,8 @@ function desenharRodadas() {
   const card=elemento('article',undefined,'painel');
   card.append(elemento('h3',r.nome));
   card.append(elemento('p',`${r.status} · ${r.travada?'travada (aguardando início)':'liberada'} · ${r.segundos}s/pergunta · pódio ${r.podio}${r.bloco?' · bloco "'+r.bloco+'"':''}`));
-  card.append(linkCopiavel('Link do jogo',baseUrl()+'?r='+r.id));
-  card.append(linkCopiavel('Link do telão',baseUrl()+'telao.html?r='+r.id));
+  card.append(linkCopiavel('Link do jogo',linkComTenant('?r='+r.id)));
+  card.append(linkCopiavel('Link do telão',linkComTenant('telao.html?r='+r.id)));
   card.append(elemento('p',r.esperados?`${r.esperados} nome(s) na lista de seleção.`:'Sem lista de nomes esperados (jogador digita o nome livremente).'));
   const barra=elemento('div',undefined,'barra');
   if(r.status==='aberta') {
@@ -257,6 +257,7 @@ for(const btn of $('abas').children) {
 }
 async function atualizar() {
  estado=await chamar('estado');
+ aplicarMarca(estado);
  desenharRodadas();desenharPerguntas();desenharBlocos();desenharLojas();
 }
 $('login').addEventListener('submit',async e=>{

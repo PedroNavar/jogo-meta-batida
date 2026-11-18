@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Novo cliente · Jogo da Meta Batida</title><link rel="stylesheet" href="css/jogo.css"><link rel="stylesheet" href="css/admin.css"><script type="module" src="js/clientes.js"></script></head>
+<body class="pagina-admin"><header class="marca"><span>CRIAR CLIENTE NOVO</span><img class="logo-metta" src="img/logo-metta.svg" alt="Metta" width="120" height="26"></header>
+<main class="admin">
+<p class="sobretitulo">SÓ VOCÊ</p><h1>Novo cliente</h1><p id="mensagem" role="status" aria-live="polite"></p>
+
+<form id="login" class="painel"><h2>Senha master</h2><label for="senha-login">Senha</label><input id="senha-login" type="password" autocomplete="current-password" required><button class="principal">Entrar</button></form>
+
+<div id="aplicacao" hidden>
+<form id="form-cliente" class="painel">
+ <h2>Dados do cliente</h2>
+ <div class="campo"><label for="c-nome">Nome do cliente</label><input id="c-nome" required></div>
+ <div class="campo"><label for="c-slug">Identificador (slug)</label><input id="c-slug" pattern="[a-z0-9-]+" placeholder="ex.: nova-loja" required><p>Só letras minúsculas, números e hífen — vira o <code>?c=</code> do link.</p></div>
+ <div class="campo"><label for="c-logo">URL da logo (fundo escuro — prefira versão branca)</label><input id="c-logo" type="url" placeholder="https://..."></div>
+ <div class="campo"><label for="c-cor">Cor principal (opcional)</label><input id="c-cor" type="text" placeholder="#FFBE18"></div>
+ <div class="campo"><label for="c-senha-gerente">Senha do gerente deste cliente</label><input id="c-senha-gerente" type="password" required></div>
+ <div class="campo"><label for="c-senha-admin">Senha do admin deste cliente</label><input id="c-senha-admin" type="password" required></div>
+ <button class="principal">Criar cliente</button>
+</form>
+<section id="resultado" class="painel" hidden>
+ <h2>Cliente criado</h2>
+ <div id="links-resultado"></div>
+</section>
+</div>
+</main></body></html>

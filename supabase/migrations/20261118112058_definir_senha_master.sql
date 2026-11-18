@@ -1,0 +1,2 @@
+-- Define a senha master (gerada e mostrada uma vez pro Pedro em chat). Redigido aqui de
+-- propósito antes do commit: repo é público, senha não entra em texto puro no git.
