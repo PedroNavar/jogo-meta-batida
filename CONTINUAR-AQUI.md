@@ -4,6 +4,14 @@
 > Idioma do Pedro: português. Ele prefere ação direta (executar, não perguntar à toa)
 > e corrigir a causa, não o sintoma. Avise antes de ação cara/inédita.
 >
+> **Existe uma CÓPIA OFICIAL DA METTA desde 2026-11-18**, independente deste repositório:
+> GitHub `metta-brasil-tech/jogos-e-ferramentas-de-habilitacao` (pasta `jogo-meta-batida/`),
+> Supabase `rcmspjlocnuugcsfzles`, site
+> `https://metta-brasil-tech.github.io/jogos-e-ferramentas-de-habilitacao/jogo-meta-batida/`.
+> Pasta local: `pessoal\meta-batida-metta\`. Começou vazia (sem clientes). ESTE repositório
+> (`PedroNavar/jogo-meta-batida`) continua como ambiente de teste/desenvolvimento do Pedro.
+> Correção feita lá e não aqui (ou vice-versa) precisa ser levada pro outro na mão.
+>
 > **A seção 10** ("Pedidos do Pedro em 2026-11-11") tem os 7 pedidos mais recentes — todos
 > já implementados e testados (painel admin novo: rodadas com trava, perguntas em lote,
 > blocos, lixeira, CSV detalhado, tela de feedback). Leia as "Limitações conhecidas" no fim
